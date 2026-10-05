@@ -1,5 +1,6 @@
 """Create the free mathematical variable (printed as `_x_` by the library)."""
-variable() = _locked(() -> _owned(ccall(_fn(:sollya_lib_free_variable), Ptr{Cvoid}, ()), :variable))
+variable() =
+    _locked(() -> _owned(ccall(_fn(:sollya_lib_free_variable), Ptr{Cvoid}, ()), :variable))
 
 for (op, native) in ((:+, :add), (:-, :sub), (:*, :mul), (:/, :div), (:^, :pow))
     symbol = Symbol(:sollya_lib_, native)
@@ -14,9 +15,30 @@ Base.:+(obj::SollyaObject) = copy(obj)
 # Resolve the Base integer-power specialization explicitly.
 Base.:^(obj::SollyaObject, exponent::Integer) = _binary(:sollya_lib_pow, obj, exponent)
 
-for name in (:sqrt, :exp, :log, :log2, :log10, :sin, :cos, :tan, :asin, :acos,
-             :atan, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh, :abs, :log1p, :expm1,
-             :ceil, :floor)
+for name in (
+    :sqrt,
+    :exp,
+    :log,
+    :log2,
+    :log10,
+    :sin,
+    :cos,
+    :tan,
+    :asin,
+    :acos,
+    :atan,
+    :sinh,
+    :cosh,
+    :tanh,
+    :asinh,
+    :acosh,
+    :atanh,
+    :abs,
+    :log1p,
+    :expm1,
+    :ceil,
+    :floor,
+)
     symbol = Symbol(:sollya_lib_, name)
     @eval Base.$name(obj::SollyaObject) = _unary($(QuoteNode(symbol)), obj)
 end
@@ -30,7 +52,11 @@ for (name, native, doc) in (
     (:expand, :expand, "Expand the expression without introducing rounding."),
     (:simplify, :simplify, "Apply Sollya's error-free simplification."),
     (:infimum, :inf, "Return the exact stored lower interval endpoint as a Sollya object."),
-    (:supremum, :sup, "Return the exact stored upper interval endpoint as a Sollya object."),
+    (
+        :supremum,
+        :sup,
+        "Return the exact stored upper interval endpoint as a Sollya object.",
+    ),
     (:midpoint, :mid, "Return Sollya's interval midpoint."),
 )
     symbol = Symbol(:sollya_lib_, native)
@@ -68,11 +94,12 @@ Build an outward-rounded interval. Exact dyadic bounds are preserved; non-dyadic
 or irrational bounds may be enlarged at the current working precision.
 Reversed endpoints are rejected rather than silently sorted.
 """
-function interval(lower, upper=lower)
+function interval(lower, upper = lower)
     _locked() do
         comparison = _binary(:sollya_lib_cmp_greater, lower, upper)
         try
-            _bool(comparison) && throw(ArgumentError("lower interval endpoint exceeds upper endpoint"))
+            _bool(comparison) &&
+                throw(ArgumentError("lower interval endpoint exceeds upper endpoint"))
         finally
             close(comparison)
         end
@@ -103,8 +130,16 @@ function sollya_list(values)
     length(args) <= typemax(Cint) || throw(ArgumentError("list is too long"))
     _locked() do
         _withobjects(args...) do ptrs
-            _owned(ccall(_fn(:sollya_lib_list), Ptr{Cvoid}, (Ptr{Ptr{Cvoid}}, Cint),
-                         ptrs, length(ptrs)), :list)
+            _owned(
+                ccall(
+                    _fn(:sollya_lib_list),
+                    Ptr{Cvoid},
+                    (Ptr{Ptr{Cvoid}}, Cint),
+                    ptrs,
+                    length(ptrs),
+                ),
+                :list,
+            )
         end
     end
 end
@@ -124,14 +159,21 @@ function Base.getindex(obj::SollyaObject, index::Integer)
         1 <= index <= length(obj) || throw(BoundsError(obj, index))
         result = Ref{Ptr{Cvoid}}(C_NULL)
         GC.@preserve obj begin
-            ok = ccall(_fn(:sollya_lib_get_element_in_list), Cint,
-                       (Ref{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), result, _ptr(obj), index - 1)
+            ok = ccall(
+                _fn(:sollya_lib_get_element_in_list),
+                Cint,
+                (Ref{Ptr{Cvoid}}, Ptr{Cvoid}, Cint),
+                result,
+                _ptr(obj),
+                index - 1,
+            )
             ok != 0 || throw(SollyaError(:getindex, "native list indexing failed"))
             return _owned(result[], :getindex)
         end
     end
 end
-Base.iterate(obj::SollyaObject, state::Int=1) = state > length(obj) ? nothing : (obj[state], state + 1)
+Base.iterate(obj::SollyaObject, state::Int = 1) =
+    state > length(obj) ? nothing : (obj[state], state + 1)
 Base.eltype(::Type{SollyaObject}) = SollyaObject
 Base.IteratorSize(::Type{SollyaObject}) = Base.HasLength()
 
@@ -184,14 +226,16 @@ function coefficients(obj::SollyaObject)
     _locked() do
         d = degree(obj)
         # Native Sollya reports degree zero for the zero polynomial.
-        return [begin
-            c = _binary(:sollya_lib_coeff, obj, k)
-            try
-                exact_rational(c)
-            finally
-                close(c)
-            end
-        end for k in 0:max(0, d)]
+        return [
+            begin
+                c = _binary(:sollya_lib_coeff, obj, k)
+                try
+                    exact_rational(c)
+                finally
+                    close(c)
+                end
+            end for k = 0:max(0, d)
+        ]
     end
 end
 
@@ -208,13 +252,17 @@ function _indicator(value::Symbol, allowed)
     value ∈ allowed || throw(ArgumentError("expected one of $allowed; got $value"))
     return _owned(ccall(_fn(Symbol(:sollya_lib_, value)), Ptr{Cvoid}, ()), value)
 end
-function _format(value; fixed::Bool=false)
+function _format(value; fixed::Bool = false)
     if value isa Integer
-        (fixed || value >= 2) || throw(ArgumentError("floating coefficient precision must be at least 2"))
-        typemin(Cint) <= value <= typemax(Cint) || throw(ArgumentError("format width is outside C int range"))
+        (fixed || value >= 2) ||
+            throw(ArgumentError("floating coefficient precision must be at least 2"))
+        typemin(Cint) <= value <= typemax(Cint) ||
+            throw(ArgumentError("format width is outside C int range"))
         return SollyaObject(value)
     elseif value isa Symbol && haskey(_formats, value)
-        fixed && throw(ArgumentError("fixed coefficient formats must be integer fractional widths"))
+        fixed && throw(
+            ArgumentError("fixed coefficient formats must be integer fractional widths"),
+        )
         return _owned(ccall(_fn(_formats[value]), Ptr{Cvoid}, ()), :format)
     end
     throw(ArgumentError("unsupported coefficient format: $value"))
@@ -227,9 +275,13 @@ Round using Sollya: `format` is a significand width or a format symbol such as
 `:single`. Modes: `:nearest`, `:down`, `:up`, `:zero`. This is a Sollya symbolic
 rounding operation, not a complete finite-exponent IEEE evaluator.
 """
-function round_to(obj::SollyaObject, format; mode::Symbol=:nearest)
-    modes = Dict(:nearest => :round_to_nearest, :down => :round_down,
-                 :up => :round_up, :zero => :round_towards_zero)
+function round_to(obj::SollyaObject, format; mode::Symbol = :nearest)
+    modes = Dict(
+        :nearest => :round_to_nearest,
+        :down => :round_down,
+        :up => :round_up,
+        :zero => :round_towards_zero,
+    )
     haskey(modes, mode) || throw(ArgumentError("unknown rounding mode: $mode"))
     _locked() do
         fmt = _format(format)

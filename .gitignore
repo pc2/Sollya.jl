@@ -1,4 +1,5 @@
 Manifest.toml
+/tools/format/Manifest*.toml
 *.cov
 *.mem
 /docs/build/

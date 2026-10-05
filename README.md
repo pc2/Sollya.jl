@@ -32,6 +32,23 @@ loader or the usual Homebrew locations. Set it before the first Sollya operation
 `library_path()` returns the actual loaded file. A missing library fails on first
 use, with an installation message, rather than during package precompilation.
 
+## Formatting
+
+JuliaFormatter uses four-space indentation and a 92-column margin, matching
+PRESAGe. Its version is pinned in a separate development environment. From the
+repository root:
+
+```sh
+julia --startup-file=no --project=tools/format -e 'using Pkg; Pkg.instantiate()'
+julia --startup-file=no --project=tools/format scripts/format.jl
+julia --startup-file=no --project=tools/format scripts/format.jl --check
+```
+
+The command formats Julia files in `src`, `scripts`, `test` and `examples`.
+`--check` exits with status 1 when formatting is required and does not write
+files. For offline setup, reuse a resolved formatter manifest and cached
+dependencies, and call `Pkg.offline(true)` before `Pkg.instantiate()`.
+
 ## Generate and certify a polynomial
 
 ```julia

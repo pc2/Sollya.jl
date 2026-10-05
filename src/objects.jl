@@ -17,7 +17,8 @@ mutable struct SollyaObject
 end
 
 function _ptr(obj::SollyaObject)
-    obj.process == getpid() || throw(ArgumentError("Sollya objects belong to their creating process"))
+    obj.process == getpid() ||
+        throw(ArgumentError("Sollya objects belong to their creating process"))
     obj.ptr != C_NULL || throw(ArgumentError("Sollya object is closed"))
     return obj.ptr
 end
@@ -70,7 +71,8 @@ end
 drain_finalizers!() = _locked(() -> nothing)
 
 function Base.close(obj::SollyaObject)
-    obj.process == getpid() || throw(ArgumentError("Sollya object belongs to another process"))
+    obj.process == getpid() ||
+        throw(ArgumentError("Sollya object belongs to another process"))
     _locked() do
         lock(_finalizer_lock)
         ptr = try
@@ -87,8 +89,12 @@ end
 Base.isopen(obj::SollyaObject) = obj.process == getpid() && obj.ptr != C_NULL
 
 function Serialization.serialize(::Serialization.AbstractSerializer, ::SollyaObject)
-    throw(ArgumentError("Cannot serialize native Sollya objects; use exact_rational, " *
-                        "coefficients, or an ApproximationRequest/ApproximationResult"))
+    throw(
+        ArgumentError(
+            "Cannot serialize native Sollya objects; use exact_rational, " *
+            "coefficients, or an ApproximationRequest/ApproximationResult",
+        ),
+    )
 end
 
 """Parse and evaluate a Sollya expression. Invalid expressions throw `SollyaError`."""
@@ -110,7 +116,10 @@ SollyaObject(obj::SollyaObject) = copy(obj)
 function SollyaObject(value::Integer)
     if typemin(Int64) <= value <= typemax(Int64)
         return _locked() do
-            _owned(ccall(_fn(:sollya_lib_constant_from_int64), Ptr{Cvoid}, (Int64,), value), :constant)
+            _owned(
+                ccall(_fn(:sollya_lib_constant_from_int64), Ptr{Cvoid}, (Int64,), value),
+                :constant,
+            )
         end
     end
     return sollya(string(value))
@@ -118,9 +127,12 @@ end
 function SollyaObject(value::Rational)
     return sollya("($(numerator(value)))/($(denominator(value)))")
 end
-function SollyaObject(value::Union{Float16,Float32,Float64})
+function SollyaObject(value::Union{Float16, Float32, Float64})
     _locked() do
-        _owned(ccall(_fn(:sollya_lib_constant_from_double), Ptr{Cvoid}, (Cdouble,), value), :constant)
+        _owned(
+            ccall(_fn(:sollya_lib_constant_from_double), Ptr{Cvoid}, (Cdouble,), value),
+            :constant,
+        )
     end
 end
 function SollyaObject(value::AbstractFloat)
@@ -131,7 +143,10 @@ end
 function Base.copy(obj::SollyaObject)
     _locked() do
         GC.@preserve obj begin
-            _owned(ccall(_fn(:sollya_lib_copy_obj), Ptr{Cvoid}, (Ptr{Cvoid},), _ptr(obj)), :copy)
+            _owned(
+                ccall(_fn(:sollya_lib_copy_obj), Ptr{Cvoid}, (Ptr{Cvoid},), _ptr(obj)),
+                :copy,
+            )
         end
     end
 end
@@ -164,7 +179,10 @@ end
 function _binary(symbol::Symbol, a, b)
     _locked() do
         _withobjects(a, b) do p
-            _owned(ccall(_fn(symbol), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), p[1], p[2]), symbol)
+            _owned(
+                ccall(_fn(symbol), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), p[1], p[2]),
+                symbol,
+            )
         end
     end
 end
@@ -172,7 +190,17 @@ end
 function _ternary(symbol::Symbol, a, b, c)
     _locked() do
         _withobjects(a, b, c) do p
-            _owned(ccall(_fn(symbol), Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), p[1], p[2], p[3]), symbol)
+            _owned(
+                ccall(
+                    _fn(symbol),
+                    Ptr{Cvoid},
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                    p[1],
+                    p[2],
+                    p[3],
+                ),
+                symbol,
+            )
         end
     end
 end
@@ -199,7 +227,7 @@ Print a Sollya expression with an explicit display mode, restoring the global
 display setting. Dyadic output preserves stored binary constants exactly.
 Printing is not an exact conversion of an unevaluated irrational constant.
 """
-function expression(obj::SollyaObject; display::Symbol=:dyadic)
+function expression(obj::SollyaObject; display::Symbol = :dyadic)
     display ∈ (:dyadic, :decimal, :hexadecimal, :binary, :powers) ||
         throw(ArgumentError("unsupported display mode: $display"))
     _locked() do
@@ -209,13 +237,28 @@ function expression(obj::SollyaObject; display::Symbol=:dyadic)
             ccall(_fn(:sollya_lib_set_display), Cvoid, (Ptr{Cvoid},), mode)
             GC.@preserve obj begin
                 ptr = _ptr(obj)
-                size = ccall(_fn(:sollya_lib_snprintf), Cint,
-                             (Ptr{UInt8}, Csize_t, Cstring, Ptr{Cvoid}...), C_NULL, 0, "%b", ptr)
+                size = ccall(
+                    _fn(:sollya_lib_snprintf),
+                    Cint,
+                    (Ptr{UInt8}, Csize_t, Cstring, Ptr{Cvoid}...),
+                    C_NULL,
+                    0,
+                    "%b",
+                    ptr,
+                )
                 size >= 0 || throw(SollyaError(:print, "native snprintf failed"))
                 buffer = Vector{UInt8}(undef, size + 1)
-                written = ccall(_fn(:sollya_lib_snprintf), Cint,
-                                (Ptr{UInt8}, Csize_t, Cstring, Ptr{Cvoid}...), buffer, length(buffer), "%b", ptr)
-                written == size || throw(SollyaError(:print, "inconsistent native snprintf result"))
+                written = ccall(
+                    _fn(:sollya_lib_snprintf),
+                    Cint,
+                    (Ptr{UInt8}, Csize_t, Cstring, Ptr{Cvoid}...),
+                    buffer,
+                    length(buffer),
+                    "%b",
+                    ptr,
+                )
+                written == size ||
+                    throw(SollyaError(:print, "inconsistent native snprintf result"))
                 return String(buffer[1:size])
             end
         finally
@@ -259,16 +302,33 @@ function exact_rational(obj::SollyaObject)
         ccall(_fn(:__gmpq_init), Cvoid, (Ref{_NativeMPQ},), q)
         try
             GC.@preserve obj q begin
-                ok = ccall(_fn(:sollya_lib_get_constant_as_mpq), Cint,
-                           (Ref{_NativeMPQ}, Ptr{Cvoid}), q, _ptr(obj))
-                ok != 0 || throw(SollyaError(:exact_rational, "not a finite rational constant"))
+                ok = ccall(
+                    _fn(:sollya_lib_get_constant_as_mpq),
+                    Cint,
+                    (Ref{_NativeMPQ}, Ptr{Cvoid}),
+                    q,
+                    _ptr(obj),
+                )
+                ok != 0 ||
+                    throw(SollyaError(:exact_rational, "not a finite rational constant"))
                 p = Ptr{UInt8}(Base.unsafe_convert(Ptr{_NativeMPQ}, q))
                 n = ccall(_fn(:__gmpz_sizeinbase), Csize_t, (Ptr{Cvoid}, Cint), p, 10)
-                d = ccall(_fn(:__gmpz_sizeinbase), Csize_t, (Ptr{Cvoid}, Cint),
-                          p + fieldoffset(_NativeMPQ, 2), 10)
+                d = ccall(
+                    _fn(:__gmpz_sizeinbase),
+                    Csize_t,
+                    (Ptr{Cvoid}, Cint),
+                    p + fieldoffset(_NativeMPQ, 2),
+                    10,
+                )
                 buffer = Vector{UInt8}(undef, Int(n + d + 4))
-                ccall(_fn(:__gmpq_get_str), Ptr{UInt8},
-                      (Ptr{UInt8}, Cint, Ref{_NativeMPQ}), buffer, 10, q)
+                ccall(
+                    _fn(:__gmpq_get_str),
+                    Ptr{UInt8},
+                    (Ptr{UInt8}, Cint, Ref{_NativeMPQ}),
+                    buffer,
+                    10,
+                    q,
+                )
                 text = GC.@preserve buffer unsafe_string(pointer(buffer))
                 parts = split(text, '/')
                 numerator = parse(BigInt, parts[1])
@@ -286,9 +346,15 @@ function Base.Float64(obj::SollyaObject)
     _locked() do
         result = Ref{Cdouble}()
         GC.@preserve obj begin
-            ok = ccall(_fn(:sollya_lib_get_constant_as_double), Cint,
-                       (Ref{Cdouble}, Ptr{Cvoid}), result, _ptr(obj))
-            ok != 0 || throw(SollyaError(:Float64, "not convertible to a floating constant"))
+            ok = ccall(
+                _fn(:sollya_lib_get_constant_as_double),
+                Cint,
+                (Ref{Cdouble}, Ptr{Cvoid}),
+                result,
+                _ptr(obj),
+            )
+            ok != 0 ||
+                throw(SollyaError(:Float64, "not convertible to a floating constant"))
             return result[]
         end
     end
