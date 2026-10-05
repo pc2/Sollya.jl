@@ -1,0 +1,21 @@
+name = "Sollya"
+uuid = "4ba3657f-7d7c-4d39-81ac-6271ee86fac5"
+authors = ["PRESAGe contributors"]
+version = "0.1.0"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[compat]
+Distributed = "1"
+Libdl = "1"
+Serialization = "1"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

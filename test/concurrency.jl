@@ -1,0 +1,88 @@
+@testset "Thread serialization and deferred finalization" begin
+    original = working_precision()
+    tasks = map((128,192,256,384)) do bits
+        Threads.@spawn with_session(Session(; precision=bits)) do
+            for k in 1:50
+                obj = SollyaObject((big(1)<<k) + bits)
+                @test exact_rational(obj) == (big(1)<<k) + bits
+                @test working_precision() == bits
+                # Explicit finalization exercises deferred frees, even when the
+                # callback is already holding the process-wide native lock.
+                finalize(obj)
+                @test !isopen(obj)
+            end
+            bits
+        end
+    end
+    @test fetch.(tasks) == (128,192,256,384)
+    @test working_precision() == original
+    GC.gc(true)
+    drain_finalizers!()
+    obj = SollyaObject(17)
+    @test exact_rational(obj) == 17
+    close(obj)
+end
+
+@testset "Serializable approximation jobs" begin
+    request = ApproximationRequest("erf(x)", (0,1//4); precision=128)
+    @test deserialize(IOBuffer(let io=IOBuffer(); serialize(io,request); take!(io); end)).domain == request.domain
+    result = approximate(request)
+    @test result.domain == (0,1//4)
+    @test result.error == :absolute
+    @test result.precision == 128
+    @test 0 < result.norm_bound[1] <= result.norm_bound[2] < 1//100000000
+    @test length(result.coefficients) == 6
+    io = IOBuffer()
+    serialize(io,result)
+    seekstart(io)
+    @test deserialize(io).coefficients == result.coefficients
+    for kwargs in ((; basis=-1), (; basis=[2,1]), (; formats=[:single]),
+                   (; error=:unknown), (; arithmetic=:fixed), (; precision=1), (; accuracy=0))
+        @test_throws ArgumentError ApproximationRequest("exp(x)",(0,1); kwargs...)
+    end
+    @test_throws ArgumentError ApproximationRequest("exp(x)",(1,0))
+    fixed = approximate(ApproximationRequest("sin(x)",(-1//32,1//32);
+                                             basis=6,formats=32,arithmetic=:fixed))
+    @test all(c -> denominator(c*(big(1)<<32)) == 1, fixed.coefficients)
+end
+
+# Distributed uses localhost sockets. Set this only in environments that forbid
+# socket creation; ordinary Pkg.test and CI always run the process tests.
+if get(ENV,"SOLLYA_TEST_WORKERS","true") == "true"
+    @testset "Independent local worker processes" begin
+        original = working_precision()
+        previous_workers = Set(Distributed.workers())
+        ids = Int[]
+        SollyaPool(2) do pool
+            append!(ids,pool.workers)
+            @test length(ids) == 2
+            @test length(unique(Distributed.remotecall_fetch(getpid,id) for id in ids)) == 2
+            requests = [ApproximationRequest("erf(x)",(0,1//4); precision=bits)
+                        for bits in (128,384,192,256)]
+            results = approximate_many(pool,requests)
+            @test [r.precision for r in results] == [128,384,192,256]
+            @test all(r -> 0 < r.norm_bound[2] < 1//100000000,results)
+            # fpminimax can choose different coefficients at different working
+            # precisions; check each result's declared representation and proof.
+            @test all(r -> all(c -> Rational{BigInt}(Float32(Float64(c))) == c,
+                              r.coefficients),results)
+            @test working_precision() == original
+            @test isopen(pool)
+            bad = ApproximationRequest("invalid expression ]",(0,1))
+            @test_throws Exception approximate_many(pool,[bad])
+            @test length(approximate_many(pool,[requests[1]])) == 1
+            close(pool)
+            close(pool)
+            @test !isopen(pool)
+            @test_throws ArgumentError approximate_many(pool,requests)
+        end
+        @test isempty(intersect(Set(ids),Set(Distributed.workers())))
+        @test Set(Distributed.workers()) == previous_workers
+        @test working_precision() == original
+        @test_throws ArgumentError SollyaPool(0)
+    end
+else
+    @testset "Independent local worker processes" begin
+        @test_skip false # explicitly disabled by SOLLYA_TEST_WORKERS
+    end
+end
