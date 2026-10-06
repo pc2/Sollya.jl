@@ -44,6 +44,23 @@ end
     @test (precision(BigFloat), rounding(BigFloat)) == original
 end
 
+@testset "Concurrent symbolic BigFloat conversion" begin
+    original = (precision(BigFloat), rounding(BigFloat), working_precision())
+    with_objects() do keep
+        obj = keep(SollyaObject(π))
+        cases = ((3, RoundDown), (64, RoundUp), (192, RoundNearest), (512, RoundToZero))
+        tasks = map(cases) do (bits, mode)
+            Threads.@spawn BigFloat(obj, mode; precision = bits)
+        end
+        for ((bits, mode), result) in zip(cases, fetch.(tasks))
+            @test result == BigFloat(π, mode; precision = bits)
+            @test precision(result) == bits
+        end
+        @test isopen(obj)
+    end
+    @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
+end
+
 @testset "Concurrent BigFloat bounds settings" begin
     original = (precision(BigFloat), rounding(BigFloat), working_precision())
     with_objects() do keep

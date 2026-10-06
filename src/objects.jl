@@ -402,6 +402,14 @@ Extract a finite, provably rational constant using Sollya's exact MPQ conversion
 Rejects intervals, irrational expressions, infinities and NaN instead of rounding.
 """
 function exact_rational(obj::SollyaObject)
+    result = _try_exact_rational(obj)
+    result === nothing &&
+        throw(SollyaError(:exact_rational, "not a finite rational constant"))
+    return result
+end
+
+# A failed exact conversion is expected when refining a symbolic constant.
+function _try_exact_rational(obj::SollyaObject)
     _locked() do
         zero_z = _NativeMPZ(0, 0, C_NULL)
         q = Ref(_NativeMPQ(zero_z, zero_z))
@@ -415,8 +423,7 @@ function exact_rational(obj::SollyaObject)
                     q,
                     _ptr(obj),
                 )
-                ok != 0 ||
-                    throw(SollyaError(:exact_rational, "not a finite rational constant"))
+                ok == 0 && return nothing
                 p = Ptr{UInt8}(Base.unsafe_convert(Ptr{_NativeMPQ}, q))
                 n = ccall(_fn(:__gmpz_sizeinbase), Csize_t, (Ptr{Cvoid}, Cint), p, 10)
                 d = ccall(
@@ -466,21 +473,94 @@ function _rounded_bigfloat(q::Rational{BigInt}, mode::RoundingMode, bits::Intege
 end
 
 """
-    BigFloat(obj::SollyaObject, mode=rounding(BigFloat); precision=precision(BigFloat))
+    BigFloat(obj::SollyaObject, mode=rounding(BigFloat);
+             precision=precision(BigFloat), max_work_precision=nothing)
 
-Correctly round a finite rational constant to a BigFloat. Supports `RoundNearest`
+Correctly round a finite real constant to a BigFloat. Supports `RoundNearest`
 (ties to even), `RoundDown`, `RoundUp`, `RoundToZero` and `RoundFromZero`. Defaults
-to Julia's current precision and rounding mode without changing either setting.
-Rejects irrational expressions, intervals, infinities and NaN with `SollyaError`.
+to Julia's current precision and rounding mode. Rational constants are converted
+exactly before rounding. Other constant expressions, including π, ℯ and φ, use
+interval refinement until both endpoints round to the same result.
+
+`max_work_precision` limits the Sollya working precision used for refinement,
+defaulting to `max(4096, 2 * precision)`, capped at `typemax(Cint)`. An explicit
+limit must be in `12:typemax(Cint)`; it does not limit exact rational conversion
+or internal native guard bits. This is not a time limit. If rounding cannot be
+certified within the limit, throw `SollyaError`; increasing the limit may help.
+Some exact zeros or rounding-boundary values remain undecidable by refinement.
+
+Rejects nonconstant functions, intervals, infinities and NaN with `SollyaError`.
+Julia's settings are unchanged, and temporary Sollya settings are restored on
+success or failure. Signed zero is normalized by Sollya's exact rational export.
 """
 function Base.BigFloat(
     obj::SollyaObject,
     mode::RoundingMode = rounding(BigFloat);
     precision::Integer = Base.precision(BigFloat),
+    max_work_precision::Union{Nothing, Integer} = nothing,
 )
-    return _rounded_bigfloat(exact_rational(obj), mode, precision)
+    if max_work_precision !== nothing
+        12 <= max_work_precision <= typemax(Cint) ||
+            throw(ArgumentError("max_work_precision must be in 12:$(typemax(Cint))"))
+    end
+    _locked() do
+        rational = _try_exact_rational(obj)
+        rational !== nothing && return _rounded_bigfloat(rational, mode, precision)
+        return _rounded_symbolic_bigfloat(obj, mode, precision, max_work_precision)
+    end
 end
 Base.convert(::Type{BigFloat}, obj::SollyaObject) = BigFloat(obj)
+
+function _rounded_symbolic_bigfloat(obj, mode, precision, max_work_precision)
+    # Validate the requested rounding and MPFR precision through the same path
+    # as rational conversion before doing any native refinement.
+    bits = Base.precision(_rounded_bigfloat(big(0) // big(1), mode, precision))
+    limit = if max_work_precision === nothing
+        Int(min(typemax(Cint), max(4096, 2 * big(bits))))
+    else
+        Int(max_work_precision)
+    end
+    work_bits = min(limit, bits + 32)
+    while true
+        lo, hi = try
+            with_session(Session(; precision = work_bits)) do
+                with_objects() do keep
+                    # The native singleton range constructor requires a constant
+                    # expression and guarantees inclusion. No point substitution
+                    # or heuristic equality comparison is involved.
+                    range = keep(
+                        _require_range(_binary(:sollya_lib_range, obj, obj), :BigFloat),
+                    )
+                    (
+                        _try_exact_rational(keep(infimum(range))),
+                        _try_exact_rational(keep(supremum(range))),
+                    )
+                end
+            end
+        catch err
+            err isa SollyaError || rethrow()
+            throw(
+                SollyaError(
+                    :BigFloat,
+                    "cannot enclose a finite constant: " * err.detail,
+                    err.diagnostics,
+                ),
+            )
+        end
+        if lo !== nothing && hi !== nothing
+            lower = _rounded_bigfloat(lo, mode, bits)
+            upper = _rounded_bigfloat(hi, mode, bits)
+            isequal(lower, upper) && return lower
+        end
+        work_bits == limit && throw(
+            SollyaError(
+                :BigFloat,
+                "cannot certify rounding of a finite constant to $bits bits within max_work_precision=$limit",
+            ),
+        )
+        work_bits += min(work_bits, limit - work_bits)
+    end
+end
 
 """Convert approximately to Float64; this is not a directed error bound."""
 function Base.Float64(obj::SollyaObject)

@@ -64,7 +64,7 @@ end
                             @test expression(obj) == expression(keep(sollya(text)))
                             @test structurally_equal(obj, keep(sollya(text)))
                             @test_throws SollyaError exact_rational(obj)
-                            @test_throws SollyaError BigFloat(obj)
+                            @test precision(BigFloat(obj)) == 32
                             @test precision(BigFloat) == 32
                             @test rounding(BigFloat) == RoundUp
                             @test working_precision() == 12
@@ -271,11 +271,111 @@ end
             obj = keep(SollyaObject(1 // 3))
             @test_throws DomainError BigFloat(obj; precision = 0)
             @test_throws ArgumentError BigFloat(obj, RoundNearestTiesAway)
-            for text in ("pi", "x", "[1;1]", "NaN", "infty", "-infty")
+            for text in ("x", "[1;1]", "NaN", "infty", "-infty")
                 @test_throws SollyaError BigFloat(keep(sollya(text)))
             end
             close(obj)
             @test_throws ArgumentError BigFloat(obj)
+        end
+    end
+end
+
+@testset "BigFloat export certifies symbolic rounding" begin
+    with_session(Session(; precision = 20, verbosity = 1)) do
+        with_objects() do keep
+            modes = (RoundNearest, RoundDown, RoundUp, RoundToZero, RoundFromZero)
+            for (text, reference) in (
+                ("pi", () -> BigFloat(π)),
+                ("exp(1)", () -> exp(BigFloat(1))),
+                ("(1+sqrt(5))/2", () -> (1 + sqrt(BigFloat(5))) / 2),
+                ("sqrt(2)", () -> sqrt(BigFloat(2))),
+                ("log(2)", () -> log(BigFloat(2))),
+            )
+                positive = keep(sollya(text))
+                negative = keep(-positive)
+                for bits in (3, 256, 512)
+                    # Independently bracket each value using Julia's elementary
+                    # functions at higher precision, with directed rounding.
+                    reflo, refhi, neglo, neghi = setprecision(BigFloat, bits + 256) do
+                        lo = setrounding(reference, BigFloat, RoundDown)
+                        hi = setrounding(reference, BigFloat, RoundUp)
+                        # Negation also uses Julia's ambient precision.
+                        (lo, hi, -hi, -lo)
+                    end
+                    for (obj, lo, hi) in
+                        ((positive, reflo, refhi), (negative, neglo, neghi)),
+                        mode in modes
+
+                        expected = BigFloat(lo, mode; precision = bits)
+                        @test isequal(expected, BigFloat(hi, mode; precision = bits))
+                        result = BigFloat(obj, mode; precision = bits)
+                        @test isequal(result, expected)
+                        @test precision(result) == bits
+                    end
+                end
+            end
+
+            # The tiny positive term decides which side of a midpoint to use.
+            difficult = keep(sollya("1+1b-20+pi*1b-600"))
+            @test_throws SollyaError BigFloat(
+                difficult;
+                precision = 20,
+                max_work_precision = 512,
+            )
+            @test BigFloat(difficult; precision = 20, max_work_precision = 1024) ==
+                  1 + 1 // (1 << 19)
+            @test BigFloat(keep(-difficult); precision = 20, max_work_precision = 1024) ==
+                  -1 - 1 // (1 << 19)
+            @test BigFloat(keep(sollya("sin(pi)"))) == 0
+            # An exact boundary that native rational simplification cannot prove
+            # must fail instead of treating a narrow interval as an exact value.
+            @test_throws SollyaError BigFloat(
+                keep(sollya("1+sin(pi)")),
+                RoundUp;
+                precision = 24,
+                max_work_precision = 64,
+            )
+
+            p = keep(SollyaObject(π))
+            setprecision(BigFloat, 64) do
+                setrounding(BigFloat, RoundUp) do
+                    expected = BigFloat(π)
+                    @test BigFloat(p) == expected
+                    @test convert(BigFloat, p) == expected
+                    @test BigFloat[p] == [expected]
+                    @test_throws SollyaError BigFloat(p; max_work_precision = 12)
+                    @test precision(BigFloat) == 64
+                    @test rounding(BigFloat) == RoundUp
+                    @test working_precision() == 20
+                    @test exact_rational(keep(sollya("verbosity"))) == 1
+                end
+            end
+            for limit in (0, 11, big(typemax(Cint)) + 1)
+                @test_throws ArgumentError BigFloat(p; max_work_precision = limit)
+            end
+            @test_throws DomainError BigFloat(p; precision = 0)
+            @test_throws ArgumentError BigFloat(p, RoundNearestTiesAway)
+            for text in (
+                "x",
+                "sqrt(-1)",
+                "[1;1]",
+                "[1;2]",
+                "[|1,2|]",
+                "true",
+                "NaN",
+                "infty",
+                "-infty",
+            )
+                @test_throws SollyaError BigFloat(
+                    keep(sollya(text));
+                    max_work_precision = 32,
+                )
+            end
+            @test working_precision() == 20
+            @test exact_rational(keep(sollya("verbosity"))) == 1
+            @test isopen(p)
+            close(p)
+            @test_throws ArgumentError BigFloat(p)
         end
     end
 end

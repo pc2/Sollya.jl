@@ -132,6 +132,12 @@ pi, Euler's number and the golden ratio symbolically. Their aliases `pi`,
 such as `π * x` or `ℯ * x` preserve these constants exactly; `interval(0, π)`
 produces outward-rounded bounds at the current Sollya working precision.
 
+`BigFloat(obj; precision=256)` correctly rounds finite symbolic constants as well
+as rational values. For symbolic values, conversion refines an enclosure until
+rounding is certified; `max_work_precision` controls the refinement limit.
+An inconclusive conversion throws `SollyaError`. See the
+[conversion contract](docs/api.md#expressions-and-data-transfer).
+
 Use `structurally_equal(a, b)` to compare stored symbolic expressions. `equal(a, b)`
 uses Sollya's native comparison, which is not a certified equality test; see the
 [comparison contract](docs/api.md#expressions-and-data-transfer).

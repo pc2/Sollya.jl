@@ -84,8 +84,7 @@ storage remain within the process library lock.
   Sollya working precision, as do intervals with ℯ or φ endpoints.
   Other Julia irrational constants, including Euler's constant `γ` and Catalan's
   constant, are not imported implicitly. `ApproximationRequest`
-  endpoints still require finite rational or binary floating-point values;
-  direct `BigFloat(obj)` conversion still requires a finite rational constant.
+  endpoints still require finite rational or binary floating-point values.
 - `exact_rational(obj)` returns `Rational{BigInt}` only if Sollya proves the object
   is a finite rational constant. It rejects irrational constants and intervals.
 - `zero(SollyaObject)` and `one(SollyaObject)` construct exact scalar identities.
@@ -111,13 +110,27 @@ storage remain within the process library lock.
 - `Float64(obj)` is approximate. Do not use it to export a certified upper bound:
   it may round inward. Use exact `bounds(obj)` or outward-rounded
   `bounds(BigFloat, obj; precision=...)`.
-- `BigFloat(obj, mode=rounding(BigFloat); precision=precision(BigFloat))` correctly
-  rounds a finite rational constant using
+- `BigFloat(obj, mode=rounding(BigFloat); precision=precision(BigFloat),
+  max_work_precision=nothing)` correctly rounds a finite real constant.
+  Rational constants use
   [MPFR's rational conversion](https://www.mpfr.org/mpfr-current/mpfr.html#Assignment-Functions).
   Supported modes are `RoundNearest` (ties to even), `RoundDown`, `RoundUp`,
-  `RoundToZero` and `RoundFromZero`. `convert(BigFloat, obj)` uses Julia's current
-  settings. Conversion does not change either Julia or Sollya settings, and
-  rejects irrational expressions, intervals, infinities and NaN with `SollyaError`.
+  `RoundToZero` and `RoundFromZero`. Other constant expressions, including π, ℯ,
+  φ, `sqrt(2)` and `log(2)`, use guaranteed interval enclosures at increasing
+  working precision. A result is returned only when both endpoints round to
+  the same BigFloat under the requested mode. `convert(BigFloat, obj)` and
+  `BigFloat.(objects)` use Julia's current settings.
+  `max_work_precision` defaults to `max(4096, 2 * precision)`, capped at
+  `typemax(Cint)`; an explicit value must be in `12:typemax(Cint)`. It limits
+  refinement's Sollya working precision, not native guard bits or elapsed time,
+  and does not restrict exact rational conversion. If the limit is reached
+  without certifying rounding, conversion throws `SollyaError`. Increase the
+  limit to retry a difficult expression. Exact zeros or rounding-boundary
+  values that Sollya cannot simplify may remain inconclusive at any precision.
+  Nonconstant functions, intervals, infinities and NaN are rejected. Julia's
+  settings are unchanged, and temporary Sollya settings are restored on success
+  and failure. `exact_rational` and `coefficients(BigFloat, ...)` continue to
+  require rational values.
 - Native list indices are translated to **one-based Julia indexing**; indexed
   elements own their references. Only finite lists have a finite `length`.
 - Expressions, constants and intervals broadcast as scalars, so operations such
