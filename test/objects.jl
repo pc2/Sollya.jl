@@ -83,6 +83,64 @@ end
     end
 end
 
+@testset "BigFloat export rounds finite rational constants" begin
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            modes = (RoundNearest, RoundDown, RoundUp, RoundToZero, RoundFromZero)
+            for (value, expected) in (
+                (11 // 13, (7 // 8, 3 // 4, 7 // 8, 3 // 4, 7 // 8)),
+                (-11 // 13, (-7 // 8, -7 // 8, -3 // 4, -3 // 4, -7 // 8)),
+                (9 // 8, (1, 1, 5 // 4, 1, 5 // 4)),
+                (11 // 8, (3 // 2, 5 // 4, 3 // 2, 5 // 4, 3 // 2)),
+                (0, (0, 0, 0, 0, 0)),
+            )
+                obj = keep(SollyaObject(value))
+                for (mode, wanted) in zip(modes, expected)
+                    result = BigFloat(obj, mode; precision = 3)
+                    @test result == wanted
+                    @test precision(result) == 3
+                end
+            end
+            setprecision(BigFloat, 64) do
+                setrounding(BigFloat, RoundUp) do
+                    for value in (
+                        ((big(1) << 400) + 1) // (big(1) << 400),
+                        (big(1) << 2000) + (big(1) << 1600),
+                        big(1) // (big(1) << 2000),
+                    )
+                        obj = keep(SollyaObject(value))
+                        result = BigFloat(obj, RoundNearest; precision = 512)
+                        @test precision(result) == 512
+                        @test exact_rational(keep(SollyaObject(result))) == value
+                        @test isopen(obj)
+                    end
+                    obj = keep(SollyaObject(11 // 13))
+                    result = BigFloat(obj)
+                    @test precision(result) == 64
+                    @test exact_rational(keep(SollyaObject(prevfloat(result)))) <
+                          11 // 13 <
+                          exact_rational(keep(SollyaObject(result)))
+                    @test convert(BigFloat, obj) == result
+                    @test BigFloat[obj] == [result]
+                    @test BigFloat(obj, RoundDown; precision = 3) == 3 // 4
+                    @test BigFloat(obj, RoundNearest; precision = 1) == 1
+                    @test precision(BigFloat) == 64
+                    @test rounding(BigFloat) == RoundUp
+                end
+            end
+            @test working_precision() == 20
+            obj = keep(SollyaObject(1 // 3))
+            @test_throws DomainError BigFloat(obj; precision = 0)
+            @test_throws ArgumentError BigFloat(obj, RoundNearestTiesAway)
+            for text in ("pi", "x", "[1;1]", "NaN", "infty", "-infty")
+                @test_throws SollyaError BigFloat(keep(sollya(text)))
+            end
+            close(obj)
+            @test_throws ArgumentError BigFloat(obj)
+        end
+    end
+end
+
 @testset "Settings restored on success and failure" begin
     original = working_precision()
     settings() =

@@ -23,6 +23,27 @@
     close(obj)
 end
 
+@testset "Concurrent BigFloat conversion settings" begin
+    original = (precision(BigFloat), rounding(BigFloat))
+    with_objects() do keep
+        obj = keep(SollyaObject(11 // 13))
+        cases = (
+            (3, RoundDown, 3 // 4),
+            (4, RoundUp, 7 // 8),
+            (5, RoundToZero, 27 // 32),
+            (6, RoundUp, 55 // 64),
+        )
+        tasks = map(cases) do (bits, mode, _)
+            Threads.@spawn BigFloat(obj, mode; precision = bits)
+        end
+        for ((bits, _, expected), result) in zip(cases, fetch.(tasks))
+            @test result == expected
+            @test precision(result) == bits
+        end
+    end
+    @test (precision(BigFloat), rounding(BigFloat)) == original
+end
+
 @testset "Serializable approximation jobs" begin
     request = ApproximationRequest("erf(x)", (0, 1 // 4); precision = 128)
     @test deserialize(IOBuffer(let io = IOBuffer()

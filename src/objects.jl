@@ -350,6 +350,41 @@ function exact_rational(obj::SollyaObject)
     end
 end
 
+function _rounded_bigfloat(q::Rational{BigInt}, mode::RoundingMode, bits::Integer)
+    mode in (RoundNearest, RoundDown, RoundUp, RoundToZero, RoundFromZero) ||
+        throw(ArgumentError("unsupported BigFloat rounding mode: $mode"))
+    result = BigFloat(; precision = bits)
+    # Use Julia's rooted GMP adapter and Julia's MPFR, never Sollya's libraries.
+    # Converting the whole rational at once avoids rounding its operands first.
+    mpq = Base.GMP.MPQ._MPQ(q)
+    GC.@preserve q mpq result ccall(
+        (:mpfr_set_q, Base.MPFR.libmpfr),
+        Cint,
+        (Ref{BigFloat}, Base.GMP.MPQ.mpq_t, Base.MPFR.MPFRRoundingMode),
+        result,
+        mpq,
+        convert(Base.MPFR.MPFRRoundingMode, mode),
+    )
+    return result
+end
+
+"""
+    BigFloat(obj::SollyaObject, mode=rounding(BigFloat); precision=precision(BigFloat))
+
+Correctly round a finite rational constant to a BigFloat. Supports `RoundNearest`
+(ties to even), `RoundDown`, `RoundUp`, `RoundToZero` and `RoundFromZero`. Defaults
+to Julia's current precision and rounding mode without changing either setting.
+Rejects irrational expressions, intervals, infinities and NaN with `SollyaError`.
+"""
+function Base.BigFloat(
+    obj::SollyaObject,
+    mode::RoundingMode = rounding(BigFloat);
+    precision::Integer = Base.precision(BigFloat),
+)
+    return _rounded_bigfloat(exact_rational(obj), mode, precision)
+end
+Base.convert(::Type{BigFloat}, obj::SollyaObject) = BigFloat(obj)
+
 """Convert approximately to Float64; this is not a directed error bound."""
 function Base.Float64(obj::SollyaObject)
     _locked() do

@@ -39,6 +39,13 @@ The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
   proof that arbitrary irrational expressions are rational.
 - `Float64(obj)` is approximate. Do not use it to export a certified upper bound:
   it may round inward. Use `bounds` and retain its exact rational endpoints.
+- `BigFloat(obj, mode=rounding(BigFloat); precision=precision(BigFloat))` correctly
+  rounds a finite rational constant using
+  [MPFR's rational conversion](https://www.mpfr.org/mpfr-current/mpfr.html#Assignment-Functions).
+  Supported modes are `RoundNearest` (ties to even), `RoundDown`, `RoundUp`,
+  `RoundToZero` and `RoundFromZero`. `convert(BigFloat, obj)` uses Julia's current
+  settings. Conversion does not change either Julia or Sollya settings, and
+  rejects irrational expressions, intervals, infinities and NaN with `SollyaError`.
 - Native list indices are translated to **one-based Julia indexing**; indexed
   elements own their references. Only finite lists have a finite `length`.
 - Expressions, constants and intervals broadcast as scalars, so operations such

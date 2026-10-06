@@ -108,7 +108,7 @@ while references remain alive.
 | Approximation | `remez`, `fpminimax`, `guessdegree` |
 | Error analysis | `supnorm`, `infnorm`, `checkinfnorm`, diagnostic `dirtyinfnorm` |
 | Zeros | `findzeros`, diagnostic `dirtyfindzeros` |
-| Representation | `exact_rational`, `expression`, approximate `Float64`, `round_to` |
+| Representation | `exact_rational`, `expression`, approximate `Float64`, rounded `BigFloat`, `round_to` |
 | Configuration and concurrency | `Session`, `with_session`, `working_precision`, `SollyaPool`, `approximate_many` |
 
 This is a focused numerical interface, not a binding of the entire Sollya command
