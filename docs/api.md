@@ -73,6 +73,12 @@ storage remain within the process library lock.
   sign semantics in the evaluator.
 - `exact_rational(obj)` returns `Rational{BigInt}` only if Sollya proves the object
   is a finite rational constant. It rejects irrational constants and intervals.
+- `zero(SollyaObject)` and `one(SollyaObject)` construct exact scalar identities.
+  The instance forms `zero(obj)` and `one(obj)` return scalar identities for
+  constants and expressions, and singleton interval identities for intervals.
+  They reject lists, other nonnumeric objects and closed handles with
+  `ArgumentError`. Each call returns a new owning object; closing an identity
+  does not close its input or another identity.
 - `coefficients(p)` returns exact coefficients in ascending order, including
   absent internal terms. `coeff(p,k)` uses **zero-based polynomial order**.
   Unlike native Sollya's `coeff`, both reject a non-polynomial.

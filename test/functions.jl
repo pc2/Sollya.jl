@@ -81,6 +81,49 @@
     end
 end
 
+@testset "Exact scalar and interval identities" begin
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            for (identity, value) in ((zero, 0), (one, 1))
+                first = keep(identity(SollyaObject))
+                second = keep(identity(SollyaObject))
+                close(first)
+                @test exact_rational(second) == value
+                for source in (keep(SollyaObject(11 // 13)), keep(variable()))
+                    result = keep(identity(source))
+                    @test exact_rational(result) == value
+                    close(result)
+                    @test isopen(source)
+                    close(source)
+                    @test_throws ArgumentError identity(source)
+                end
+                for text in ("[|1,2|]", "true", "\"text\"")
+                    @test_throws ArgumentError identity(keep(sollya(text)))
+                end
+            end
+            @test exact_rational(keep(sum(SollyaObject[]))) == 0
+            @test exact_rational(keep(prod(SollyaObject[]))) == 1
+            x = keep(variable())
+            # A generic polynomial recurrence uses identities of its argument.
+            p = keep(zero(x))
+            unit = keep(one(x))
+            for _ = 1:3
+                p = keep(keep(p * x) + unit)
+            end
+            @test coefficients(p) == [1, 1, 1]
+            domain = keep(interval(-1, 2))
+            z, u = keep(zero(domain)), keep(one(domain))
+            @test bounds(z) == (0, 0)
+            @test bounds(u) == (1, 1)
+            @test bounds(keep(domain + z)) == bounds(domain)
+            @test bounds(keep(domain * u)) == bounds(domain)
+            close(domain)
+            @test bounds(z) == (0, 0)
+            @test bounds(u) == (1, 1)
+        end
+    end
+end
+
 @testset "BigFloat coefficients preserve order and rounding" begin
     with_session(Session(; precision = 20)) do
         with_objects() do keep

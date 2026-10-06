@@ -110,7 +110,7 @@ while references remain alive.
 
 | Purpose | API |
 | --- | --- |
-| Expressions and exact constants | `sollya`, `sollya"…"`, `SollyaObject`, `variable`, arithmetic, Julia elementary functions, `erf`, `erfc` |
+| Expressions and exact constants | `sollya`, `sollya"…"`, `SollyaObject`, `zero`, `one`, `variable`, arithmetic, Julia elementary functions, `erf`, `erfc` |
 | Polynomial operations | `differentiate`, `substitute`, `horner`, `canonical`, `expand`, `simplify`, `degree`, `coeff`, `coefficients` |
 | Native lists | `sollya_list`, one-based indexing, iteration, `length` |
 | Object lifetime | `with_objects`, `copy`, `close`, `isopen`, `drain_finalizers!` |

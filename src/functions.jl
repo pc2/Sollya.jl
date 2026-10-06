@@ -2,6 +2,36 @@
 variable() =
     _locked(() -> _owned(ccall(_fn(:sollya_lib_free_variable), Ptr{Cvoid}, ()), :variable))
 
+"""
+    zero(SollyaObject)
+    zero(obj::SollyaObject)
+
+Create an owning exact zero. The type form returns a scalar constant. The instance
+form accepts scalar constants and expressions, or returns `[0;0]` for an interval.
+Lists and other nonnumeric objects are rejected with `ArgumentError`.
+"""
+Base.zero(::Type{SollyaObject}) = SollyaObject(0)
+Base.zero(obj::SollyaObject) = _identity_object(obj, 0)
+
+"""
+    one(SollyaObject)
+    one(obj::SollyaObject)
+
+Create an owning exact one. The type form returns a scalar constant. The instance
+form accepts scalar constants and expressions, or returns `[1;1]` for an interval.
+Lists and other nonnumeric objects are rejected with `ArgumentError`.
+"""
+Base.one(::Type{SollyaObject}) = SollyaObject(1)
+Base.one(obj::SollyaObject) = _identity_object(obj, 1)
+
+function _identity_object(obj::SollyaObject, value::Int)
+    _locked() do
+        isfunction(obj) && return SollyaObject(value)
+        isrange(obj) && return interval(value)
+        throw(ArgumentError("zero and one require a scalar expression or interval"))
+    end
+end
+
 for (op, native) in ((:+, :add), (:-, :sub), (:*, :mul), (:/, :div), (:^, :pow))
     symbol = Symbol(:sollya_lib_, native)
     @eval begin
