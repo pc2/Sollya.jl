@@ -49,6 +49,80 @@
     end
 end
 
+@testset "Julia irrational constants import symbolically" begin
+    for (value, alias, text) in (
+        (π, pi, "pi"),
+        (ℯ, Base.MathConstants.e, "exp(1)"),
+        (Base.MathConstants.φ, Base.MathConstants.golden, "(1+sqrt(5))/2"),
+    )
+        with_session() do
+            with_objects() do keep
+                p = with_session(Session(; precision = 12)) do
+                    setprecision(BigFloat, 32) do
+                        setrounding(BigFloat, RoundUp) do
+                            obj = keep(SollyaObject(value))
+                            @test expression(obj) == expression(keep(sollya(text)))
+                            @test structurally_equal(obj, keep(sollya(text)))
+                            @test_throws SollyaError exact_rational(obj)
+                            @test_throws SollyaError BigFloat(obj)
+                            @test precision(BigFloat) == 32
+                            @test rounding(BigFloat) == RoundUp
+                            @test working_precision() == 12
+                            obj
+                        end
+                    end
+                end
+                # Parsing can combine φ / 2 into (1 + sqrt(5)) / 4.
+                @test bounds(keep(interval(keep(p / 2)))) ==
+                      bounds(keep(interval(keep(sollya("($text)/2")))))
+                x = keep(variable())
+                for (result, expected_text) in (
+                    (keep(value * x), "($text)*x"),
+                    (keep(x + value), "x+($text)"),
+                    (keep(value - x), "($text)-x"),
+                    (keep(x / value), "x/($text)"),
+                    (keep(x^value), "x^($text)"),
+                    (keep(value^x), "($text)^x"),
+                )
+                    expected = keep(sollya(expected_text))
+                    @test structurally_equal(result, expected)
+                    @test bounds(keep(enclosure(result, 2))) ==
+                          bounds(keep(enclosure(expected, 2)))
+                end
+                @test structurally_equal(keep(value .+ x), keep(sollya("($text)+x")))
+                with_session(Session(; precision = 512)) do
+                    # A low-precision import must still enclose the high-precision constant.
+                    lo, hi = bounds(BigFloat, keep(interval(p)); precision = 512)
+                    # Julia evaluates ℯ and φ through elementary operations;
+                    # use directed rounding with guard bits for reference bounds.
+                    reference_lo = setrounding(BigFloat, RoundDown) do
+                        BigFloat(value; precision = 640)
+                    end
+                    reference_hi = setrounding(BigFloat, RoundUp) do
+                        BigFloat(value; precision = 640)
+                    end
+                    @test lo <= reference_lo < reference_hi <= hi
+                    @test hi - lo < big(1) // (big(1) << 500)
+                    lower, upper =
+                        bounds(BigFloat, keep(interval(0, value)); precision = 512)
+                    @test lower == 0
+                    @test reference_hi <= upper
+                end
+                duplicate = keep(SollyaObject(alias))
+                dependent = keep(p * x)
+                close(p)
+                @test structurally_equal(duplicate, keep(sollya(text)))
+                @test structurally_equal(dependent, keep(sollya("($text)*x")))
+                @test bounds(keep(enclosure(dependent, 2))) ==
+                      bounds(keep(interval(keep(2 * duplicate))))
+                @test_throws ArgumentError ApproximationRequest("sin(x)", (0, value))
+            end
+        end
+    end
+    @test_throws MethodError SollyaObject(Base.MathConstants.eulergamma)
+    @test_throws MethodError SollyaObject(Base.MathConstants.catalan)
+end
+
 @testset "Scoped object cleanup" begin
     registered = SollyaObject[]
     result = with_objects() do keep

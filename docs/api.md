@@ -71,6 +71,21 @@ storage remain within the process library lock.
   endpoints and accuracy in `ApproximationRequest`; conversion does not change
   those settings. Signed zero is not a distinct rational coefficient; model IEEE
   sign semantics in the evaluator.
+- `SollyaObject(π)`, `SollyaObject(ℯ)` and `SollyaObject(Base.MathConstants.φ)`
+  import exact symbolic constants: `pi`, `exp(1)` and `(1 + sqrt(5)) / 2`.
+  The aliases `pi`, `Base.MathConstants.e` and `Base.MathConstants.golden` also
+  work. No floating-point rounding occurs during construction; the constants
+  are evaluated at the precision of use. Mixed arithmetic such as `π * x`,
+  `ℯ * x` and `x + Base.MathConstants.φ` uses these exact imports.
+  Use `SollyaObject(π) / 2` to keep a fraction symbolic: Julia evaluates `π / 2`
+  as floating point before it can be imported. Likewise, use
+  `exp(SollyaObject(1))` instead of `SollyaObject(exp(1))` to preserve symbolic ℯ.
+  `interval(0, π)` evaluates and rounds its endpoints outward at the current
+  Sollya working precision, as do intervals with ℯ or φ endpoints.
+  Other Julia irrational constants, including Euler's constant `γ` and Catalan's
+  constant, are not imported implicitly. `ApproximationRequest`
+  endpoints still require finite rational or binary floating-point values;
+  direct `BigFloat(obj)` conversion still requires a finite rational constant.
 - `exact_rational(obj)` returns `Rational{BigInt}` only if Sollya proves the object
   is a finite rational constant. It rejects irrational constants and intervals.
 - `zero(SollyaObject)` and `one(SollyaObject)` construct exact scalar identities.
@@ -114,8 +129,23 @@ All numerical operators create native objects. `+ - * / ^`, `abs`, `sqrt`, `exp`
 `log`, `log2`, `log10`, the trigonometric and hyperbolic families, `log1p`,
 `expm1`, `ceil` and `floor` extend their Julia methods for `SollyaObject`.
 `Sollya.erf` and `Sollya.erfc` build symbolic expressions without requiring
-SpecialFunctions.jl. `equal` uses Sollya's mathematical comparison and rejects
-undecidable results; Julia object identity and hashing are not repurposed.
+SpecialFunctions.jl.
+
+`equal(a, b)` returns Sollya's native `==` result, which is not a certified
+mathematical equality test. A `false` result can mean equality was not
+established, even for matching expressions involving π. A `true` result can
+rely on numerical evaluation that did not prove equality. Native precision and
+simplification settings affect the result, and warnings may be hidden at
+verbosity zero. Only non-Boolean native results raise `SollyaError`.
+
+`structurally_equal(a, b)` compares stored native representations without
+numerically testing equality. Use it to recognize matching symbolic expressions,
+including independently constructed `π * x` objects. Construction and
+simplification can affect the stored structure; this is not a comparison of the
+original source text. Different structures may still represent the same
+mathematical function, and two native NaNs compare structurally equal. Both
+comparison functions import non-object arguments through `SollyaObject`.
+Julia object identity, `isequal`, and hashing are not repurposed.
 
 ## Approximation
 

@@ -101,13 +101,51 @@ function _bool(obj::SollyaObject)
     throw(SollyaError(:boolean, "result is not a decidable Boolean"))
 end
 
-"""Ask Sollya whether two expressions are equal. Undecidable comparisons throw."""
+"""
+    equal(a, b)
+
+Return Sollya's native `==` result. This is not a certified mathematical equality
+test: `false` can mean equality was not established, and `true` can rely on
+numerical evaluation that did not prove equality. Results depend on native
+precision and simplification settings; warnings may be hidden at verbosity zero.
+Only a non-Boolean native result throws `SollyaError`.
+
+Use [`structurally_equal`](@ref) to compare native object representations without
+numerically testing equality. Julia object identity and hashing are unchanged.
+"""
 function equal(a, b)
     result = _binary(:sollya_lib_cmp_equal, a, b)
     try
         return _bool(result)
     finally
         close(result)
+    end
+end
+
+"""
+    structurally_equal(a, b)
+
+Compare native object representations without numerically testing equality.
+Arguments are imported through `SollyaObject` when needed, as with [`equal`](@ref).
+This compares the stored structure after construction and simplification, not
+the original source text. Algebraically equivalent expressions can have different
+structures; `false` does not prove mathematical inequality. Two native NaNs have
+the same structure and compare `true` here.
+
+For example, two independently constructed `π * x` expressions compare `true`.
+This does not change Julia object identity, `isequal`, or hashing.
+"""
+function structurally_equal(a, b)
+    _locked() do
+        _withobjects(a, b) do p
+            ccall(
+                _fn(:sollya_lib_cmp_objs_structurally),
+                Cint,
+                (Ptr{Cvoid}, Ptr{Cvoid}),
+                p[1],
+                p[2],
+            ) != 0
+        end
     end
 end
 

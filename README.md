@@ -126,6 +126,16 @@ Failed parsing, `fpminimax`, `remez` and `supnorm` calls provide context through
 summary strings, also shown in the printed error. See the
 [diagnostic contract](docs/api.md#errors-and-diagnostics) for capture limits.
 
+`SollyaObject(π)`, `SollyaObject(ℯ)` and `SollyaObject(Base.MathConstants.φ)` import
+pi, Euler's number and the golden ratio symbolically. Their aliases `pi`,
+`Base.MathConstants.e` and `Base.MathConstants.golden` also work. Mixed expressions
+such as `π * x` or `ℯ * x` preserve these constants exactly; `interval(0, π)`
+produces outward-rounded bounds at the current Sollya working precision.
+
+Use `structurally_equal(a, b)` to compare stored symbolic expressions. `equal(a, b)`
+uses Sollya's native comparison, which is not a certified equality test; see the
+[comparison contract](docs/api.md#expressions-and-data-transfer).
+
 This is a focused numerical interface, not a binding of the entire Sollya command
 language. User-defined native callbacks, external functions, plotting, proof-file generation
 and arbitrary basis functions are outside the initial API. Symbolic composition

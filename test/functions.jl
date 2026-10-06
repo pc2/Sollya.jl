@@ -81,6 +81,49 @@
     end
 end
 
+@testset "Native comparison contracts" begin
+    with_session() do
+        with_objects() do keep
+            first = keep(sollya("pi*x"))
+            second = keep(sollya("pi*x"))
+            @test structurally_equal(first, first)
+            @test structurally_equal(first, second)
+            @test structurally_equal(second, first)
+            @test !isequal(first, second)
+            @test structurally_equal(keep(copy(first)), first)
+            @test !structurally_equal(first, keep(sollya("pi*x+1")))
+
+            # Different trees can describe the same function.
+            a = keep(sollya("exp(x)*sin(x)"))
+            b = keep(sollya("sin(x)*exp(x)"))
+            @test !structurally_equal(a, b)
+            @test equal(keep(sollya("(x+1)^2")), keep(sollya("x^2+2*x+1")))
+            @test !equal(1, 2)
+
+            # Plain inputs follow the same constructor rules as arithmetic.
+            @test structurally_equal(1, 1)
+            @test !structurally_equal(1, 2)
+            @test structurally_equal(π, keep(SollyaObject(π)))
+            @test structurally_equal(keep(SollyaObject(π)), π)
+            @test structurally_equal(keep(SollyaObject(3 // 8)), BigFloat(3 // 8))
+            @test structurally_equal(keep(interval(1, 2)), keep(interval(1, 2)))
+            @test !structurally_equal(keep(interval(1, 2)), keep(interval(1, 3)))
+            @test structurally_equal(keep(sollya_list([1, 2])), keep(sollya_list([1, 2])))
+            @test !structurally_equal(keep(sollya_list([1, 2])), keep(sollya_list([2, 1])))
+
+            # Structural NaN equality does not assert numerical equality.
+            nan1, nan2 = keep(sollya("@NaN@")), keep(sollya("@NaN@"))
+            @test structurally_equal(nan1, nan2)
+            @test !equal(nan1, nan2)
+            @test isopen(first) && isopen(second)
+            close(first)
+            @test structurally_equal(second, keep(sollya("pi*x")))
+            @test_throws ArgumentError structurally_equal(first, second)
+            @test_throws ArgumentError structurally_equal(1, first)
+        end
+    end
+end
+
 @testset "Exact scalar and interval identities" begin
     with_session(Session(; precision = 20)) do
         with_objects() do keep

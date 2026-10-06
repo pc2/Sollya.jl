@@ -6,6 +6,7 @@ const _pending_finalizers = Ptr{Cvoid}[]
 
 An owning, process-local Sollya object. Strings are parsed as Sollya expressions;
 integers, rationals and binary floating point values are imported exactly.
+Julia's `π`, `ℯ` and `Base.MathConstants.φ` are imported symbolically without rounding.
 Use `close(obj)` for deterministic release. A finalizer schedules deferred cleanup.
 Objects cannot be serialized; transfer exact rationals or expressions to workers.
 """
@@ -171,6 +172,44 @@ macro sollya_str(text)
 end
 
 SollyaObject(obj::SollyaObject) = copy(obj)
+
+"""
+    SollyaObject(π)
+
+Create an owning symbolic pi constant. Its value is independent of Julia's and
+Sollya's precision at construction and is evaluated at the precision of use.
+"""
+SollyaObject(::Irrational{:π}) =
+    _locked(() -> _owned(ccall(_fn(:sollya_lib_pi), Ptr{Cvoid}, ()), :pi))
+
+"""
+    SollyaObject(ℯ)
+    SollyaObject(Base.MathConstants.e)
+
+Create an owning symbolic `exp(1)` constant, independently of construction
+precision. Its value is evaluated at the precision of use.
+"""
+function SollyaObject(::Irrational{:ℯ})
+    with_objects() do keep
+        exp(keep(SollyaObject(1)))
+    end
+end
+
+"""
+    SollyaObject(Base.MathConstants.φ)
+    SollyaObject(Base.MathConstants.golden)
+
+Create an owning symbolic golden ratio `(1 + sqrt(5)) / 2`, independently of
+construction precision. Its value is evaluated at the precision of use.
+"""
+function SollyaObject(::Irrational{:φ})
+    with_objects() do keep
+        root = keep(sqrt(keep(SollyaObject(5))))
+        numerator = keep(1 + root)
+        numerator / 2
+    end
+end
+
 function SollyaObject(value::Integer)
     if typemin(Int64) <= value <= typemax(Int64)
         return _locked() do
