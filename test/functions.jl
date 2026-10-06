@@ -81,6 +81,28 @@
     end
 end
 
+@testset "Minimax seeds preserve coefficient formats" begin
+    with_session(Session(; precision = 128)) do
+        with_objects() do keep
+            f = keep(sollya("exp(x)"))
+            domain = keep(interval(0, 1))
+            seed = keep(remez(f, 3, domain))
+            seed_coefficients = keep(sollya_list(coefficients(seed)))
+            for constrained in (nothing, 0),
+                (kind, minimax) in ((:polynomial, seed), (:list, seed_coefficients))
+
+                @testset "constraint=$constrained, seed=$kind" begin
+                    p = keep(fpminimax(f, 3, :single, domain; constrained, minimax))
+                    @test degree(p) == 3
+                    @test all(c -> Rational{BigInt}(Float32(c)) == c, coefficients(p))
+                    certificate = keep(supnorm(p, f, domain))
+                    @test bounds(certificate)[2] < 1 // 1000
+                end
+            end
+        end
+    end
+end
+
 @testset "Approximation and proof contracts" begin
     with_session() do
         with_objects() do keep

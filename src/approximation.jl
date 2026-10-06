@@ -23,8 +23,10 @@ strictly increasing vector of monomial exponents. `formats` is a scalar repeated
 for every coefficient or a vector of matching length. Floating integers specify
 significand widths; fixed integers specify fractional widths (possibly negative).
 Format symbols include `:halfprecision`, `:single`, `:double`, `:quad`.
-`constrained` adds a fixed polynomial part; `minimax` supplies Sollya's optional
-last minimax seed. The result still needs separate error certification.
+`constrained` adds a fixed polynomial part; `minimax` supplies a polynomial or
+`sollya_list` of coefficients as Sollya's optional last minimax seed. Omitting
+`constrained` uses a zero fixed part, even when a seed is supplied. The result
+still needs separate error certification.
 """
 function fpminimax(
     f::SollyaObject,
@@ -64,7 +66,11 @@ function fpminimax(
             # Homogeneous pointer varargs, explicitly marked variadic for the
             # arm64 ABI. NULL terminates the optional arguments in Sollya.
             args = Any[f, n, fmt, domain, err, arith]
-            constrained === nothing || push!(args, constrained)
+            # The seed must occupy argument eight; argument seven is a fixed
+            # part, so supply zero there when only a seed was requested.
+            if constrained !== nothing || minimax !== nothing
+                push!(args, something(constrained, 0))
+            end
             minimax === nothing || push!(args, minimax)
             return _withobjects(args...) do p
                 p7 = length(p) >= 7 ? p[7] : C_NULL
