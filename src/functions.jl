@@ -176,6 +176,8 @@ Base.iterate(obj::SollyaObject, state::Int = 1) =
     state > length(obj) ? nothing : (obj[state], state + 1)
 Base.eltype(::Type{SollyaObject}) = SollyaObject
 Base.IteratorSize(::Type{SollyaObject}) = Base.HasLength()
+# Only native lists broadcast elementwise; other objects are scalar values.
+Base.broadcastable(obj::SollyaObject) = islist(obj) ? collect(obj) : Ref(obj)
 
 """
     evaluate(f, argument)

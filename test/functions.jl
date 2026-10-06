@@ -81,6 +81,28 @@
     end
 end
 
+@testset "Broadcasting expressions, intervals and native lists" begin
+    with_objects() do keep
+        x = keep(variable())
+        values = BigFloat[1, 2]
+        @test coefficients.(keep.(x .+ values)) == [[1, 1], [2, 1]]
+        @test coefficients.(keep.(values .+ x)) == [[1, 1], [2, 1]]
+        @test equal(keep(sin.(x)), keep(sin(x)))
+
+        p = keep(x^2)
+        @test exact_rational.(keep.(evaluate.(p, values))) == [1, 4]
+        domain = keep(interval(0, 1))
+        @test bounds.(keep.(evaluate.([x, p], domain))) == [(0, 1), (0, 1)]
+
+        list = keep(sollya_list([1, 2]))
+        @test exact_rational.(keep.(list .+ values)) == [2, 4]
+        @test coefficients.(keep.(list .+ x)) == [[1, 1], [2, 1]]
+        @test length.(Ref(list)) == 2
+        empty = keep(sollya_list([]))
+        @test isempty(empty .+ x)
+    end
+end
+
 @testset "Minimax seeds preserve coefficient formats" begin
     with_session(Session(; precision = 128)) do
         with_objects() do keep

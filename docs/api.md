@@ -38,6 +38,10 @@ The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
   it may round inward. Use `bounds` and retain its exact rational endpoints.
 - Native list indices are translated to **one-based Julia indexing**; indexed
   elements own their references. Only finite lists have a finite `length`.
+- Expressions, constants and intervals broadcast as scalars, so operations such
+  as `x .+ BigFloat[1, 2]` and `evaluate.(f, points)` work directly. Finite native
+  lists broadcast elementwise into Julia arrays; use `Ref(list)` to pass a whole
+  list as a scalar argument.
 
 All numerical operators create native objects. `+ - * / ^`, `abs`, `sqrt`, `exp`,
 `log`, `log2`, `log10`, the trigonometric and hyperbolic families, `log1p`,
