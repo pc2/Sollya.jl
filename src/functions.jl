@@ -263,6 +263,28 @@ function coefficients(obj::SollyaObject)
     end
 end
 
+"""
+    coefficients(BigFloat, obj::SollyaObject, mode=rounding(BigFloat); precision=precision(BigFloat))
+
+Export finite rational polynomial coefficients as a `Vector{BigFloat}` in
+ascending order, including internal zeros. Each coefficient is correctly rounded
+using the same precision and rounding modes as `BigFloat(obj, mode; precision)`.
+Defaults to Julia's current settings without changing either Julia or Sollya
+settings. Rejects non-polynomials and non-rational or non-finite coefficients
+with `SollyaError`.
+
+Rounding can change the polynomial; an existing certificate for `obj` does not
+automatically certify the rounded coefficients.
+"""
+function coefficients(
+    ::Type{BigFloat},
+    obj::SollyaObject,
+    mode::RoundingMode = rounding(BigFloat);
+    precision::Integer = Base.precision(BigFloat),
+)
+    return [_rounded_bigfloat(c, mode, precision) for c in coefficients(obj)]
+end
+
 const _formats = Dict(
     :halfprecision => :sollya_lib_halfprecision_obj,
     :single => :sollya_lib_single_obj,

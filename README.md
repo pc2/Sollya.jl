@@ -80,6 +80,7 @@ with_session(Session(precision=256)) do
         p = fpminimax(f, 5, :single, domain; error=:absolute)
         certificate = supnorm(p, f, domain; accuracy=1//1024)
         println(coefficients(p))
+        println(coefficients(BigFloat, p; precision=256))
         println(bounds(certificate))
         println(bounds(BigFloat, certificate; precision=256))
     finally

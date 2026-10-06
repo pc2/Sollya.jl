@@ -34,6 +34,14 @@ The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
 - `coefficients(p)` returns exact coefficients in ascending order, including
   absent internal terms. `coeff(p,k)` uses **zero-based polynomial order**.
   Unlike native Sollya's `coeff`, both reject a non-polynomial.
+- `coefficients(BigFloat, p, mode=rounding(BigFloat); precision=precision(BigFloat))`
+  returns a `Vector{BigFloat}` in the same order, including zeros. Each finite
+  rational coefficient is correctly rounded using the requested precision and
+  rounding mode, with the same defaults and supported modes as `BigFloat(obj)`.
+  It changes neither Julia nor Sollya settings and rejects non-polynomials,
+  irrational coefficients and non-finite coefficients with `SollyaError`.
+  Rounding can change the polynomial: a certificate for `p` does not
+  automatically apply to its rounded coefficients.
 - `expression(obj; display=:dyadic)` prints stored binary constants exactly and
   restores the display setting. This is an expression representation, not a
   proof that arbitrary irrational expressions are rational.

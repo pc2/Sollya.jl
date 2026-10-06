@@ -65,6 +65,27 @@ end
     @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
 end
 
+@testset "Concurrent BigFloat coefficient settings" begin
+    original = (precision(BigFloat), rounding(BigFloat), working_precision())
+    with_objects() do keep
+        p = keep(sollya("11/13 + 11/13*x^2"))
+        cases = (
+            (3, RoundDown, 3 // 4),
+            (4, RoundUp, 7 // 8),
+            (5, RoundToZero, 27 // 32),
+            (6, RoundUp, 55 // 64),
+        )
+        tasks = map(cases) do (bits, mode, _)
+            Threads.@spawn coefficients(BigFloat, p, mode; precision = bits)
+        end
+        for ((bits, _, expected), result) in zip(cases, fetch.(tasks))
+            @test result == [expected, 0, expected]
+            @test precision.(result) == fill(bits, 3)
+        end
+    end
+    @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
+end
+
 @testset "Serializable approximation jobs" begin
     request = ApproximationRequest("erf(x)", (0, 1 // 4); precision = 128)
     @test deserialize(IOBuffer(let io = IOBuffer()

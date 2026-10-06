@@ -81,6 +81,69 @@
     end
 end
 
+@testset "BigFloat coefficients preserve order and rounding" begin
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            p = keep(sollya("11/13 - 11/13*x^2 + 9/8*x^3 + 11/8*x^4"))
+            for (mode, expected) in (
+                (RoundNearest, [7 // 8, 0, -7 // 8, 1, 3 // 2]),
+                (RoundDown, [3 // 4, 0, -7 // 8, 1, 5 // 4]),
+                (RoundUp, [7 // 8, 0, -3 // 4, 5 // 4, 3 // 2]),
+                (RoundToZero, [3 // 4, 0, -3 // 4, 1, 5 // 4]),
+                (RoundFromZero, [7 // 8, 0, -7 // 8, 5 // 4, 3 // 2]),
+            )
+                result = coefficients(BigFloat, p, mode; precision = 3)
+                @test result isa Vector{BigFloat}
+                @test result == expected
+                @test precision.(result) == fill(3, 5)
+            end
+            @test coefficients(p) == [11 // 13, 0, -11 // 13, 9 // 8, 11 // 8]
+            setprecision(BigFloat, 3) do
+                setrounding(BigFloat, RoundUp) do
+                    result = coefficients(BigFloat, p)
+                    @test result == [7 // 8, 0, -3 // 4, 5 // 4, 3 // 2]
+                    @test precision.(result) == fill(3, 5)
+                    @test coefficients(BigFloat, p, RoundDown) ==
+                          [3 // 4, 0, -7 // 8, 1, 5 // 4]
+                    wide =
+                        keep(sollya("1 + 2^(-400) + (2^2000 + 2^1600)*x^2 + 2^(-2000)*x^3"))
+                    expected = [
+                        ((big(1) << 400) + 1) // (big(1) << 400),
+                        0,
+                        (big(1) << 2000) + (big(1) << 1600),
+                        big(1) // (big(1) << 2000),
+                    ]
+                    result = coefficients(BigFloat, wide, RoundNearest; precision = 512)
+                    @test map(c -> exact_rational(keep(SollyaObject(c))), result) ==
+                          expected
+                    @test precision.(result) == fill(512, 4)
+                    @test precision(BigFloat) == 3
+                    @test rounding(BigFloat) == RoundUp
+                    @test working_precision() == 20
+                end
+            end
+            for (value, expected) in ((0, 0), (11 // 13, 1))
+                result = coefficients(
+                    BigFloat,
+                    keep(SollyaObject(value)),
+                    RoundNearest;
+                    precision = 1,
+                )
+                @test result == [expected]
+                @test precision.(result) == [1]
+            end
+            @test isopen(p)
+            @test_throws DomainError coefficients(BigFloat, p; precision = 0)
+            @test_throws ArgumentError coefficients(BigFloat, p, RoundNearestTiesAway)
+            for text in ("exp(x)", "x + pi", "x + exp(1)", "x + infty", "x + NaN", "[0;1]")
+                @test_throws SollyaError coefficients(BigFloat, keep(sollya(text)))
+            end
+            close(p)
+            @test_throws ArgumentError coefficients(BigFloat, p)
+        end
+    end
+end
+
 @testset "BigFloat bounds preserve interval enclosures" begin
     with_session(Session(; precision = 20)) do
         with_objects() do keep
