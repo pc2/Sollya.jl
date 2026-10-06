@@ -75,23 +75,25 @@ function fpminimax(
             return _withobjects(args...) do p
                 p7 = length(p) >= 7 ? p[7] : C_NULL
                 p8 = length(p) >= 8 ? p[8] : C_NULL
-                _owned(
-                    ccall(
-                        _fn(:sollya_lib_fpminimax),
-                        Ptr{Cvoid},
-                        (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}...),
-                        p[1],
-                        p[2],
-                        p[3],
-                        p[4],
-                        p[5],
-                        p[6],
-                        p7,
-                        p8,
-                        C_NULL,
-                    ),
-                    :fpminimax,
-                )
+                _with_diagnostics() do
+                    _owned(
+                        ccall(
+                            _fn(:sollya_lib_fpminimax),
+                            Ptr{Cvoid},
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}...),
+                            p[1],
+                            p[2],
+                            p[3],
+                            p[4],
+                            p[5],
+                            p[6],
+                            p7,
+                            p8,
+                            C_NULL,
+                        ),
+                        :fpminimax,
+                    )
+                end
             end
         finally
             foreach(close, reverse(owned))
@@ -127,21 +129,23 @@ function remez(
                 something(quality, default),
                 something(stop_bounds, default),
             ) do p
-                _owned(
-                    ccall(
-                        _fn(:sollya_lib_remez),
-                        Ptr{Cvoid},
-                        (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}...),
-                        p[1],
-                        p[2],
-                        p[3],
-                        p[4],
-                        p[5],
-                        p[6],
-                        C_NULL,
-                    ),
-                    :remez,
-                )
+                _with_diagnostics() do
+                    _owned(
+                        ccall(
+                            _fn(:sollya_lib_remez),
+                            Ptr{Cvoid},
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}...),
+                            p[1],
+                            p[2],
+                            p[3],
+                            p[4],
+                            p[5],
+                            p[6],
+                            C_NULL,
+                        ),
+                        :remez,
+                    )
+                end
             end
         finally
             close(n)
@@ -202,20 +206,22 @@ function supnorm(
         err = _indicator(error, (:absolute, :relative))
         try
             _withobjects(p, f, domain, err, accuracy) do ptrs
-                result = _owned(
-                    ccall(
-                        _fn(:sollya_lib_supnorm),
-                        Ptr{Cvoid},
-                        (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                        ptrs[1],
-                        ptrs[2],
-                        ptrs[3],
-                        ptrs[4],
-                        ptrs[5],
-                    ),
-                    :supnorm,
-                )
-                return _require_range(result, :supnorm)
+                _with_diagnostics() do
+                    result = _owned(
+                        ccall(
+                            _fn(:sollya_lib_supnorm),
+                            Ptr{Cvoid},
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            ptrs[1],
+                            ptrs[2],
+                            ptrs[3],
+                            ptrs[4],
+                            ptrs[5],
+                        ),
+                        :supnorm,
+                    )
+                    return _require_range(result, :supnorm)
+                end
             end
         finally
             close(err)

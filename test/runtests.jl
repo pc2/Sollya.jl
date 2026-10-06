@@ -7,6 +7,7 @@ import Distributed
     @test isfile(library_path())
     @test isempty(Test.detect_ambiguities(Sollya; recursive = true))
     include("objects.jl")
+    include("diagnostics.jl")
     include("functions.jl")
     include("upstream/cases.jl")
     include("concurrency.jl")

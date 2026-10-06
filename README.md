@@ -121,8 +121,13 @@ while references remain alive.
 | Representation | `exact_rational`, `expression`, approximate `Float64`, rounded `BigFloat`, `round_to` |
 | Configuration and concurrency | `Session`, `with_session`, `working_precision`, `SollyaPool`, `approximate_many` |
 
+Failed parsing, `fpminimax`, `remez` and `supnorm` calls provide context through
+`SollyaError`. Its `diagnostics` field holds available native message IDs and
+summary strings, also shown in the printed error. See the
+[diagnostic contract](docs/api.md#errors-and-diagnostics) for capture limits.
+
 This is a focused numerical interface, not a binding of the entire Sollya command
-language. Native callbacks, external functions, plotting, proof-file generation
+language. User-defined native callbacks, external functions, plotting, proof-file generation
 and arbitrary basis functions are outside the initial API. Symbolic composition
 and supported elementary functions can still be parsed directly.
 

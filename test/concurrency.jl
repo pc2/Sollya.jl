@@ -231,6 +231,22 @@ if get(ENV, "SOLLYA_TEST_WORKERS", "true") == "true"
             bad = ApproximationRequest("invalid expression ]", (0, 1))
             @test_throws Exception approximate_many(pool, [bad])
             @test length(approximate_many(pool, [requests[1]])) == 1
+            remote_error = Distributed.remotecall_fetch(first(pool.workers)) do
+                with_session() do
+                    with_objects() do keep
+                        f = keep(sollya("exp(x)"))
+                        domain = keep(interval(0, 1))
+                        try
+                            keep(supnorm(f, f, domain))
+                            nothing
+                        catch err
+                            err
+                        end
+                    end
+                end
+            end
+            @test remote_error isa SollyaError
+            @test any(item -> first(item) == 29, remote_error.diagnostics)
             close(pool)
             close(pool)
             @test !isopen(pool)

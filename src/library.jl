@@ -2,19 +2,32 @@ const _library_lock = ReentrantLock()
 const _library_handle = Ref{Ptr{Cvoid}}(C_NULL)
 const _library_path = Ref("")
 const _symbols = Dict{Symbol, Ptr{Cvoid}}()
+const _diagnostic_callback = Ref{Ptr{Cvoid}}(C_NULL)
 
-"""An operation returned Sollya's `error` object or failed its native conversion."""
+"""
+An operation returned Sollya's `error` object or failed its native conversion.
+`operation` and `detail` identify the failure. `diagnostics` contains available
+native message IDs and generic summaries as `Pair{Int,String}` values.
+"""
 struct SollyaError <: Exception
     operation::Symbol
     detail::String
+    diagnostics::Vector{Pair{Int, String}}
 end
-Base.showerror(io::IO, e::SollyaError) = print(io, "Sollya ", e.operation, ": ", e.detail)
+SollyaError(operation, detail) = SollyaError(operation, detail, Pair{Int, String}[])
+function Base.showerror(io::IO, e::SollyaError)
+    print(io, "Sollya ", e.operation, ": ", e.detail)
+    for (id, message) in e.diagnostics
+        print(io, "\n  [", id, "] ", message)
+    end
+end
 
 function __init__()
     _library_handle[] = C_NULL
     _library_path[] = ""
     empty!(_symbols)
     empty!(_pending_finalizers)
+    _initialize_diagnostics!()
 end
 
 function _load_library!()

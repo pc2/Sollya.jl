@@ -39,6 +39,28 @@ rational. GMP operations are resolved through the loaded Sollya library and
 cleared by that same GMP. Julia's GMP/MPFR objects never cross that ABI boundary.
 The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
 
+## Errors and diagnostics
+
+`SollyaError` retains its `operation` and `detail` fields and adds `diagnostics`,
+a vector of native message IDs paired with generic summary strings. The usual
+two-argument constructor remains supported. `showerror` prints the summaries
+after the main error. Parsing errors also include up to 256 characters of the
+input, quoted and escaped.
+
+Parsing, `fpminimax`, `remez` and `supnorm` collect up to 16 distinct recent native
+messages for the failing call. These are Sollya's generic summaries, not its
+fully formatted console messages. Explicitly suppressed messages remain
+unavailable, and a failure can have no diagnostics. Successful-call diagnostics
+are discarded. Errors and their diagnostics are plain data suitable for workers.
+
+With verbosity zero and no existing callback, the approximation routines briefly
+enable warning capture while keeping console output quiet, then restore verbosity
+and the native callback on every exit. Parsing keeps verbosity unchanged because
+expressions can read settings; its native diagnostics depend on that verbosity.
+An existing callback is forwarded to and restored, with its original verbosity
+filtering and display decisions preserved. Callback state and native message
+storage remain within the process library lock.
+
 ## Expressions and data transfer
 
 - `sollya(text)`, `sollya"…"`, `SollyaObject(text)` and

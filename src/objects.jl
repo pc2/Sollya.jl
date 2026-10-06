@@ -141,7 +141,25 @@ end
 function sollya(text::AbstractString)
     occursin('\0', text) && throw(ArgumentError("Sollya expressions cannot contain NUL"))
     _locked() do
-        _owned(ccall(_fn(:sollya_lib_parse_string), Ptr{Cvoid}, (Cstring,), text), :parse)
+        try
+            # Expressions may read settings, so parsing must not change verbosity.
+            _with_diagnostics(; raise_verbosity = false) do
+                _owned(
+                    ccall(_fn(:sollya_lib_parse_string), Ptr{Cvoid}, (Cstring,), text),
+                    :parse,
+                )
+            end
+        catch err
+            err isa SollyaError || rethrow()
+            input = repr(first(text, 256)) * (length(text) > 256 ? "…" : "")
+            throw(
+                SollyaError(
+                    err.operation,
+                    err.detail * "; input: " * input,
+                    err.diagnostics,
+                ),
+            )
+        end
     end
 end
 SollyaObject(text::AbstractString) = sollya(text)

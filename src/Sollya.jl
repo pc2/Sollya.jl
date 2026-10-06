@@ -63,6 +63,7 @@ export SollyaObject,
 
 include("library.jl")
 include("objects.jl")
+include("diagnostics.jl")
 include("session.jl")
 include("functions.jl")
 include("approximation.jl")
