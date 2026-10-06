@@ -81,6 +81,147 @@
     end
 end
 
+@testset "Correctly rounded BigFloat evaluation" begin
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            f = keep(sollya("exp(x)"))
+            for bits in (3, 256, 512),
+                mode in (RoundNearest, RoundDown, RoundUp, RoundToZero, RoundFromZero)
+
+                expected = setprecision(BigFloat, bits) do
+                    setrounding(BigFloat, mode) do
+                        exp(BigFloat(1))
+                    end
+                end
+                result = evaluate(BigFloat, f, 1, mode; precision = bits)
+                @test result == expected
+                @test precision(result) == bits
+            end
+            @test BigFloat(keep(evaluate(f, 1)); precision = 512) !=
+                  evaluate(BigFloat, f, 1; precision = 512)
+
+            # Do not round the argument before substitution, even when its
+            # stored precision exceeds the ambient and requested precisions.
+            point = setprecision(BigFloat, 512) do
+                nextfloat(BigFloat(1))
+            end
+            delta = keep(sollya("x-1"))
+            setprecision(BigFloat, 64) do
+                @test evaluate(BigFloat, delta, point) == big(1) // (big(1) << 511)
+            end
+            @test evaluate(BigFloat, keep(sollya("3*x")), 1 // 3; precision = 3) == 1
+            @test evaluate(BigFloat, keep(sollya("x/pi")), π) == 1
+            @test evaluate(BigFloat, keep(sollya("log(x)")), ℯ) == 1
+            symbolic = keep(sollya("sqrt(2)"))
+            square = keep(sollya("x^2"))
+            @test evaluate(BigFloat, square, symbolic) == 2
+            @test evaluate(BigFloat, square, "sqrt(2)") == 2
+            @test isopen(symbolic) && isopen(square)
+            # Composition is accepted if its result is a constant.
+            @test evaluate(BigFloat, keep(SollyaObject(7)), keep(variable())) == 7
+
+            p = keep(sollya("-11*x/13"))
+            setprecision(BigFloat, 3) do
+                setrounding(BigFloat, RoundUp) do
+                    result = evaluate(BigFloat, p, 1)
+                    @test result == -3 // 4
+                    @test precision(result) == 3
+                    @test evaluate(BigFloat, p, 1, RoundDown) == -7 // 8
+                    result = evaluate(BigFloat, f, 1, RoundNearest; precision = 512)
+                    expected = setprecision(BigFloat, 512) do
+                        setrounding(BigFloat, RoundNearest) do
+                            exp(BigFloat(1))
+                        end
+                    end
+                    @test result == expected
+                    @test precision(result) == 512
+                    @test precision(BigFloat) == 3
+                    @test rounding(BigFloat) == RoundUp
+                end
+            end
+
+            difficult = keep(sollya("1+1b-20+x*1b-600"))
+            with_session(Session(; precision = 20, verbosity = 1)) do
+                @test_throws SollyaError evaluate(
+                    BigFloat,
+                    difficult,
+                    π;
+                    precision = 20,
+                    max_work_precision = 512,
+                )
+                @test working_precision() == 20
+                @test exact_rational(keep(sollya("verbosity"))) == 1
+                @test evaluate(
+                    BigFloat,
+                    difficult,
+                    π;
+                    precision = 20,
+                    max_work_precision = 1024,
+                ) == 1 + 1 // (1 << 19)
+                @test working_precision() == 20
+                @test exact_rational(keep(sollya("verbosity"))) == 1
+            end
+            @test isopen(difficult)
+            @test evaluate(BigFloat, p, 0; max_work_precision = 12) == 0
+            @test_throws SollyaError evaluate(
+                BigFloat,
+                keep(sollya("1+sin(x)")),
+                π,
+                RoundUp;
+                precision = 24,
+                max_work_precision = 64,
+            )
+
+            for point in (keep(variable()), keep(interval(1)), keep(sollya_list([1])))
+                @test_throws SollyaError evaluate(
+                    BigFloat,
+                    f,
+                    point;
+                    max_work_precision = 64,
+                )
+                point isa SollyaObject && @test isopen(point)
+            end
+            identity = keep(variable())
+            for point in (NaN, Inf, -Inf)
+                @test_throws SollyaError evaluate(
+                    BigFloat,
+                    identity,
+                    point;
+                    max_work_precision = 64,
+                )
+            end
+            @test_throws SollyaError evaluate(
+                BigFloat,
+                keep(sollya("sqrt(x)")),
+                -1;
+                max_work_precision = 64,
+            )
+            @test_throws SollyaError evaluate(
+                BigFloat,
+                keep(interval(1)),
+                1;
+                max_work_precision = 64,
+            )
+            @test_throws ArgumentError evaluate(BigFloat, f, 1, RoundNearestTiesAway)
+            @test_throws DomainError evaluate(BigFloat, f, 1; precision = 0)
+            for limit in (0, 11, big(typemax(Cint)) + 1)
+                @test_throws ArgumentError evaluate(
+                    BigFloat,
+                    f,
+                    1;
+                    max_work_precision = limit,
+                )
+            end
+            @test working_precision() == 20
+            @test isopen(f)
+            close(symbolic)
+            @test_throws ArgumentError evaluate(BigFloat, square, symbolic)
+            close(f)
+            @test_throws ArgumentError evaluate(BigFloat, f, 1)
+        end
+    end
+end
+
 @testset "Native comparison contracts" begin
     with_session() do
         with_objects() do keep

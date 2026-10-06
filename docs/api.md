@@ -235,6 +235,24 @@ a guaranteed image enclosure. `enclosure(f, point)` forces the latter path with 
 singleton interval. Non-dyadic endpoints may be enlarged outward at the current
 precision; `bounds` exports the **actual stored** finite endpoints exactly.
 
+`evaluate(BigFloat, f, point, mode=rounding(BigFloat);
+precision=precision(BigFloat), max_work_precision=nothing)` substitutes the point
+symbolically and then correctly rounds the resulting finite real constant.
+For example, `evaluate(BigFloat, f, π; precision=512)` substitutes exact π;
+a BigFloat point retains its stored value even if Julia's current precision is
+lower. The requested output precision is independent of Sollya's current working
+precision. Rounding modes and the refinement limit follow `BigFloat(obj; ...)`.
+Use this overload when you need a correctly rounded reference:
+`BigFloat(evaluate(f, point))` converts an already approximated native value and
+cannot recover lost accuracy.
+
+This overload follows `substitute` semantics: scalar expressions are accepted
+when their composition with `f` produces a constant. Intervals and non-scalar
+objects are rejected, and nonconstant, non-finite or uncertifiable results throw
+`SollyaError`. Input objects remain open, temporary objects are closed on success
+or failure, Julia's settings are unchanged, and temporary Sollya settings are
+restored.
+
 `bounds(BigFloat, I; precision=precision(BigFloat))` exports a finite interval as
 a pair of BigFloat endpoints, rounding the lower endpoint down and the upper
 endpoint up. Both endpoints have the requested precision, so the result encloses

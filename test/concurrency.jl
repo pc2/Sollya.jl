@@ -61,6 +61,27 @@ end
     @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
 end
 
+@testset "Concurrent BigFloat point evaluation" begin
+    original = (precision(BigFloat), rounding(BigFloat), working_precision())
+    with_objects() do keep
+        f = keep(sollya("x/2"))
+        point = keep(SollyaObject(π))
+        cases = ((3, RoundDown), (64, RoundUp), (192, RoundNearest), (512, RoundToZero))
+        tasks = map(cases) do (bits, mode)
+            Threads.@spawn evaluate(BigFloat, f, point, mode; precision = bits)
+        end
+        for ((bits, mode), result) in zip(cases, fetch.(tasks))
+            expected = setprecision(BigFloat, bits) do
+                BigFloat(π, mode) / 2
+            end
+            @test result == expected
+            @test precision(result) == bits
+        end
+        @test isopen(f) && isopen(point)
+    end
+    @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
+end
+
 @testset "Concurrent BigFloat bounds settings" begin
     original = (precision(BigFloat), rounding(BigFloat), working_precision())
     with_objects() do keep

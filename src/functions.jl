@@ -274,9 +274,49 @@ Base.broadcastable(obj::SollyaObject) = islist(obj) ? collect(obj) : Ref(obj)
 
 Native evaluation: point constants are evaluated faithfully at working precision;
 interval arguments produce guaranteed image enclosures. A constant result is
-not a correctly rounded reference. Use `enclosure` for certified point bounds.
+not a correctly rounded reference. Use `evaluate(BigFloat, f, argument)` for
+correctly rounded point values or `enclosure` for certified point bounds.
 """
 evaluate(f::SollyaObject, argument) = _binary(:sollya_lib_evaluate, f, argument)
+
+"""
+    evaluate(BigFloat, f, argument, mode=rounding(BigFloat);
+             precision=precision(BigFloat), max_work_precision=nothing)
+
+Correctly round `f(argument)` by exact symbolic substitution followed by
+`BigFloat` conversion. Numeric inputs retain their stored value, including
+BigFloat arguments created at a higher precision than Julia's current setting.
+Supported symbolic constants such as π are substituted without first rounding
+them. Defaults to Julia's current BigFloat precision and rounding mode.
+
+The substituted expression must be a finite real constant; intervals and other
+non-scalar objects are rejected. As with `substitute`, a symbolic expression is
+also accepted when composition produces a constant. Non-finite or nonconstant
+results and uncertifiable rounding throw `SollyaError`. `max_work_precision`
+has the same meaning and default as in `BigFloat(obj; ...)`.
+
+Input objects remain open, temporary objects are closed on success or failure,
+Julia's settings are unchanged, and temporary Sollya settings are restored.
+Unlike `BigFloat(evaluate(f, argument))`, this does not round an intermediate
+native point approximation before the final conversion.
+"""
+function evaluate(
+    ::Type{BigFloat},
+    f::SollyaObject,
+    argument,
+    mode::RoundingMode = rounding(BigFloat);
+    precision::Integer = Base.precision(BigFloat),
+    max_work_precision::Union{Nothing, Integer} = nothing,
+)
+    _locked() do
+        result = substitute(f, argument)
+        try
+            return BigFloat(result, mode; precision, max_work_precision)
+        finally
+            close(result)
+        end
+    end
+end
 
 """Return a guaranteed image enclosure, using a singleton interval for point inputs."""
 function enclosure(f::SollyaObject, argument)
