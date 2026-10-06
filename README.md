@@ -138,6 +138,10 @@ rounding is certified; `max_work_precision` controls the refinement limit.
 An inconclusive conversion throws `SollyaError`. See the
 [conversion contract](docs/api.md#expressions-and-data-transfer).
 
+`coefficients(BigFloat, p; precision=256)` applies this conversion to every
+coefficient, returning a Julia vector in ascending power order. Symbolic
+coefficients are supported, and `max_work_precision` applies to each coefficient.
+
 Use `structurally_equal(a, b)` to compare stored symbolic expressions. `equal(a, b)`
 uses Sollya's native comparison, which is not a certified equality test; see the
 [comparison contract](docs/api.md#expressions-and-data-transfer).

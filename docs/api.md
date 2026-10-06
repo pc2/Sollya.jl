@@ -93,15 +93,19 @@ storage remain within the process library lock.
   They reject lists, other nonnumeric objects and closed handles with
   `ArgumentError`. Each call returns a new owning object; closing an identity
   does not close its input or another identity.
-- `coefficients(p)` returns exact coefficients in ascending order, including
+- `coefficients(p)` returns a `Vector{Rational{BigInt}}` in ascending order, including
   absent internal terms. `coeff(p,k)` uses **zero-based polynomial order**.
   Unlike native Sollya's `coeff`, both reject a non-polynomial.
-- `coefficients(BigFloat, p, mode=rounding(BigFloat); precision=precision(BigFloat))`
+- `coefficients(BigFloat, p, mode=rounding(BigFloat); precision=precision(BigFloat),
+  max_work_precision=nothing)`
   returns a `Vector{BigFloat}` in the same order, including zeros. Each finite
-  rational coefficient is correctly rounded using the requested precision and
-  rounding mode, with the same defaults and supported modes as `BigFloat(obj)`.
-  It changes neither Julia nor Sollya settings and rejects non-polynomials,
-  irrational coefficients and non-finite coefficients with `SollyaError`.
+  real coefficient, including symbolic values such as π and sqrt(2), is
+  correctly rounded using `BigFloat(c, mode; precision, max_work_precision)`.
+  The refinement limit applies independently to each coefficient, with the same
+  default as scalar conversion. Julia's settings are unchanged, and temporary
+  Sollya settings are restored on success or failure. Non-polynomials,
+  non-finite coefficients and uncertifiable rounding raise `SollyaError`; no
+  partial vector is returned. `coefficients(p)` still requires rational values.
   Rounding can change the polynomial: a certificate for `p` does not
   automatically apply to its rounded coefficients.
 - `expression(obj; display=:dyadic)` prints stored binary constants exactly and
@@ -129,8 +133,8 @@ storage remain within the process library lock.
   values that Sollya cannot simplify may remain inconclusive at any precision.
   Nonconstant functions, intervals, infinities and NaN are rejected. Julia's
   settings are unchanged, and temporary Sollya settings are restored on success
-  and failure. `exact_rational` and `coefficients(BigFloat, ...)` continue to
-  require rational values.
+  and failure. `exact_rational` and `coefficients(p)` continue to require
+  rational values.
 - Native list indices are translated to **one-based Julia indexing**; indexed
   elements own their references. Only finite lists have a finite `length`.
 - Expressions, constants and intervals broadcast as scalars, so operations such

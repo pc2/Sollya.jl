@@ -313,8 +313,10 @@ function coeff(obj::SollyaObject, index::Integer)
     return _binary(:sollya_lib_coeff, obj, index)
 end
 
-"""Export exact coefficients in ascending order, including internal zeros."""
-function coefficients(obj::SollyaObject)
+"""Export finite rational coefficients exactly in ascending order, including internal zeros."""
+coefficients(obj::SollyaObject) = _map_coefficients(exact_rational, obj)
+
+function _map_coefficients(f::F, obj::SollyaObject) where {F}
     _locked() do
         d = degree(obj)
         # Native Sollya reports degree zero for the zero polynomial.
@@ -322,7 +324,7 @@ function coefficients(obj::SollyaObject)
             begin
                 c = _binary(:sollya_lib_coeff, obj, k)
                 try
-                    exact_rational(c)
+                    f(c)
                 finally
                     close(c)
                 end
@@ -332,14 +334,20 @@ function coefficients(obj::SollyaObject)
 end
 
 """
-    coefficients(BigFloat, obj::SollyaObject, mode=rounding(BigFloat); precision=precision(BigFloat))
+    coefficients(BigFloat, obj::SollyaObject, mode=rounding(BigFloat);
+                 precision=precision(BigFloat), max_work_precision=nothing)
 
-Export finite rational polynomial coefficients as a `Vector{BigFloat}` in
+Export finite real polynomial coefficients as a `Vector{BigFloat}` in
 ascending order, including internal zeros. Each coefficient is correctly rounded
-using the same precision and rounding modes as `BigFloat(obj, mode; precision)`.
-Defaults to Julia's current settings without changing either Julia or Sollya
-settings. Rejects non-polynomials and non-rational or non-finite coefficients
-with `SollyaError`.
+using `BigFloat(c, mode; precision, max_work_precision)`, including symbolic
+coefficients such as π or sqrt(2). The refinement limit applies independently
+to each coefficient and has the same default as `BigFloat` conversion.
+Defaults to Julia's current settings. Julia's settings are unchanged, and
+temporary Sollya settings are restored on success or failure. Rejects
+non-polynomials, non-finite coefficients and uncertifiable rounding with
+`SollyaError`; no partial vector is returned if a coefficient fails.
+
+`coefficients(obj)` continues to require exact rational coefficients.
 
 Rounding can change the polynomial; an existing certificate for `obj` does not
 automatically certify the rounded coefficients.
@@ -349,8 +357,11 @@ function coefficients(
     obj::SollyaObject,
     mode::RoundingMode = rounding(BigFloat);
     precision::Integer = Base.precision(BigFloat),
+    max_work_precision::Union{Nothing, Integer} = nothing,
 )
-    return [_rounded_bigfloat(c, mode, precision) for c in coefficients(obj)]
+    return _map_coefficients(obj) do c
+        BigFloat(c, mode; precision, max_work_precision)
+    end
 end
 
 const _formats = Dict(

@@ -85,7 +85,7 @@ end
 @testset "Concurrent BigFloat coefficient settings" begin
     original = (precision(BigFloat), rounding(BigFloat), working_precision())
     with_objects() do keep
-        p = keep(sollya("11/13 + 11/13*x^2"))
+        p = keep(sollya("11/13 + pi*x^2"))
         cases = (
             (3, RoundDown, 3 // 4),
             (4, RoundUp, 7 // 8),
@@ -95,8 +95,8 @@ end
         tasks = map(cases) do (bits, mode, _)
             Threads.@spawn coefficients(BigFloat, p, mode; precision = bits)
         end
-        for ((bits, _, expected), result) in zip(cases, fetch.(tasks))
-            @test result == [expected, 0, expected]
+        for ((bits, mode, expected), result) in zip(cases, fetch.(tasks))
+            @test result == [expected, 0, BigFloat(π, mode; precision = bits)]
             @test precision.(result) == fill(bits, 3)
         end
     end

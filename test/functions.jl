@@ -221,11 +221,90 @@ end
             @test isopen(p)
             @test_throws DomainError coefficients(BigFloat, p; precision = 0)
             @test_throws ArgumentError coefficients(BigFloat, p, RoundNearestTiesAway)
-            for text in ("exp(x)", "x + pi", "x + exp(1)", "x + infty", "x + NaN", "[0;1]")
+            for text in ("exp(x)", "x + infty", "x + NaN", "[0;1]")
                 @test_throws SollyaError coefficients(BigFloat, keep(sollya(text)))
             end
             close(p)
             @test_throws ArgumentError coefficients(BigFloat, p)
+        end
+    end
+end
+
+@testset "BigFloat coefficients support symbolic constants" begin
+    with_session(Session(; precision = 20, verbosity = 1)) do
+        with_objects() do keep
+            p = keep(
+                sollya("sqrt(2) + pi*x^2 - exp(1)*x^3 + ((1+sqrt(5))/2)*x^4 + 11/13*x^5"),
+            )
+            # Exact dyadic expectations check sign-sensitive rounding,
+            # internal zeros and ascending order independently of conversion.
+            for (mode, expected) in (
+                (RoundNearest, [3 // 2, 0, 3, -5 // 2, 3 // 2, 7 // 8]),
+                (RoundDown, [5 // 4, 0, 3, -3, 3 // 2, 3 // 4]),
+                (RoundUp, [3 // 2, 0, 7 // 2, -5 // 2, 7 // 4, 7 // 8]),
+                (RoundToZero, [5 // 4, 0, 3, -5 // 2, 3 // 2, 3 // 4]),
+                (RoundFromZero, [3 // 2, 0, 7 // 2, -3, 7 // 4, 7 // 8]),
+            )
+                result = coefficients(BigFloat, p, mode; precision = 3)
+                @test result isa Vector{BigFloat}
+                @test result == expected
+                @test precision.(result) == fill(3, 6)
+            end
+            @test_throws SollyaError coefficients(p)
+            setprecision(BigFloat, 64) do
+                setrounding(BigFloat, RoundUp) do
+                    simple = keep(sollya("pi*x + sqrt(2)"))
+                    @test coefficients(BigFloat, simple) == [sqrt(BigFloat(2)), BigFloat(π)]
+                    @test precision.(coefficients(BigFloat, simple)) == [64, 64]
+                    result = coefficients(BigFloat, simple, RoundNearest; precision = 512)
+                    expected = setprecision(BigFloat, 512) do
+                        setrounding(BigFloat, RoundNearest) do
+                            [sqrt(BigFloat(2)), BigFloat(π)]
+                        end
+                    end
+                    @test result == expected
+                    @test precision.(result) == [512, 512]
+                    @test precision(BigFloat) == 64
+                    @test rounding(BigFloat) == RoundUp
+                end
+            end
+            @test coefficients(BigFloat, keep(SollyaObject(π)); precision = 64) ==
+                  [BigFloat(π; precision = 64)]
+
+            # Fail after exporting a rational coefficient, then retry the same
+            # polynomial with enough precision to resolve the near-midpoint term.
+            difficult = keep(sollya("7 + (1+1b-20+pi*1b-600)*x^2"))
+            @test_throws SollyaError coefficients(
+                BigFloat,
+                difficult;
+                precision = 20,
+                max_work_precision = 512,
+            )
+            @test working_precision() == 20
+            @test exact_rational(keep(sollya("verbosity"))) == 1
+            @test isopen(difficult)
+            @test coefficients(
+                BigFloat,
+                difficult;
+                precision = 20,
+                max_work_precision = 1024,
+            ) == [7, 0, 1 + 1 // (1 << 19)]
+            @test coefficients(
+                BigFloat,
+                keep(sollya("1+2*x"));
+                precision = 64,
+                max_work_precision = 12,
+            ) == [1, 2]
+            for limit in (0, 11, big(typemax(Cint)) + 1)
+                @test_throws ArgumentError coefficients(
+                    BigFloat,
+                    p;
+                    max_work_precision = limit,
+                )
+            end
+            @test working_precision() == 20
+            @test exact_rational(keep(sollya("verbosity"))) == 1
+            @test isopen(p)
         end
     end
 end
