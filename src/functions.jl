@@ -120,6 +120,28 @@ function bounds(obj::SollyaObject)
 end
 
 """
+    bounds(BigFloat, obj::SollyaObject; precision=precision(BigFloat))
+
+Return finite interval endpoints as `(BigFloat, BigFloat)`, rounding the stored
+lower endpoint down and the upper endpoint up to preserve the enclosure. Both
+endpoints use the requested precision, defaulting to Julia's current precision.
+Ignores Julia's rounding mode and changes neither Julia nor Sollya settings.
+As with `bounds(obj)`, non-interval inputs raise `ArgumentError` and non-finite
+endpoints raise `SollyaError`.
+"""
+function bounds(
+    ::Type{BigFloat},
+    obj::SollyaObject;
+    precision::Integer = Base.precision(BigFloat),
+)
+    lo, hi = bounds(obj)
+    return (
+        _rounded_bigfloat(lo, RoundDown, precision),
+        _rounded_bigfloat(hi, RoundUp, precision),
+    )
+end
+
+"""
     sollya_list(values)
 
 Build a finite list, copying each input object. The caller retains input ownership.

@@ -44,6 +44,27 @@ end
     @test (precision(BigFloat), rounding(BigFloat)) == original
 end
 
+@testset "Concurrent BigFloat bounds settings" begin
+    original = (precision(BigFloat), rounding(BigFloat), working_precision())
+    with_objects() do keep
+        domain = keep(interval(33 // 32))
+        cases = (
+            (3, (1, 5 // 4)),
+            (4, (1, 9 // 8)),
+            (5, (1, 17 // 16)),
+            (6, (33 // 32, 33 // 32)),
+        )
+        tasks = map(cases) do (bits, _)
+            Threads.@spawn bounds(BigFloat, domain; precision = bits)
+        end
+        for ((bits, expected), result) in zip(cases, fetch.(tasks))
+            @test result == expected
+            @test precision.(result) == (bits, bits)
+        end
+    end
+    @test (precision(BigFloat), rounding(BigFloat), working_precision()) == original
+end
+
 @testset "Serializable approximation jobs" begin
     request = ApproximationRequest("erf(x)", (0, 1 // 4); precision = 128)
     @test deserialize(IOBuffer(let io = IOBuffer()

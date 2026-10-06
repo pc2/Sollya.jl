@@ -81,6 +81,68 @@
     end
 end
 
+@testset "BigFloat bounds preserve interval enclosures" begin
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            for (endpoints, expected) in (
+                ((9 // 8, 11 // 8), (1, 3 // 2)),
+                ((-11 // 8, -9 // 8), (-3 // 2, -1)),
+                ((-9 // 8, 11 // 8), (-5 // 4, 3 // 2)),
+                ((-3 // 4, 7 // 8), (-3 // 4, 7 // 8)),
+                ((9 // 8, 9 // 8), (1, 5 // 4)),
+                ((0, 0), (0, 0)),
+            )
+                domain = keep(interval(endpoints...))
+                result = bounds(BigFloat, domain; precision = 3)
+                @test result isa Tuple{BigFloat, BigFloat}
+                @test result == expected
+                @test precision.(result) == (3, 3)
+                @test bounds(domain) == endpoints
+            end
+            for endpoints in (
+                (1 // 10, 1 // 3),
+                (-1 // 3, -1 // 10),
+                (big(1) // (big(1) << 2000), big(1) // (big(1) << 1999)),
+                ((big(1) << 2000) + 1, (big(1) << 2001) + 1),
+            )
+                domain = keep(interval(endpoints...))
+                stored = bounds(domain)
+                for bits in (1, 12, 256)
+                    result = bounds(BigFloat, domain; precision = bits)
+                    lo, hi = map(x -> exact_rational(keep(SollyaObject(x))), result)
+                    @test lo <= stored[1] <= endpoints[1] <= endpoints[2] <= stored[2] <= hi
+                    @test precision.(result) == (bits, bits)
+                end
+            end
+            domain =
+                keep(interval(1 - big(1) // (big(1) << 200), 1 + big(1) // (big(1) << 200)))
+            setprecision(BigFloat, 64) do
+                for mode in (RoundNearest, RoundDown, RoundUp, RoundToZero, RoundFromZero)
+                    setrounding(BigFloat, mode) do
+                        @test bounds(BigFloat, domain) ==
+                              (prevfloat(BigFloat(1)), nextfloat(BigFloat(1)))
+                        @test precision.(bounds(BigFloat, domain)) == (64, 64)
+                        @test bounds(BigFloat, domain; precision = 3) == (7 // 8, 5 // 4)
+                        @test precision(BigFloat) == 64
+                        @test rounding(BigFloat) == mode
+                        @test working_precision() == 20
+                    end
+                end
+            end
+            @test isopen(domain)
+            @test_throws DomainError bounds(BigFloat, domain; precision = 0)
+            for text in ("1", "x", "[|1,2|]")
+                @test_throws ArgumentError bounds(BigFloat, keep(sollya(text)))
+            end
+            for text in ("[-infty;1]", "[0;infty]", "[-infty;infty]", "[NaN;NaN]")
+                @test_throws SollyaError bounds(BigFloat, keep(sollya(text)))
+            end
+            close(domain)
+            @test_throws ArgumentError bounds(BigFloat, domain)
+        end
+    end
+end
+
 @testset "Broadcasting expressions, intervals and native lists" begin
     with_objects() do keep
         x = keep(variable())
@@ -169,6 +231,11 @@ end
             certificate = keep(supnorm(p, f, I))
             lo, hi = bounds(certificate)
             @test 0 < lo <= hi < 1 // 100000000
+            float_bounds = bounds(BigFloat, certificate; precision = 24)
+            exported_lo, exported_hi =
+                map(x -> exact_rational(keep(SollyaObject(x))), float_bounds)
+            @test exported_lo <= lo <= hi <= exported_hi
+            @test precision.(float_bounds) == (24, 24)
             # Check returned proof bounds against separate 512-bit evaluations;
             # the finite samples complement the native uniform certificate.
             cs = coefficients(p)

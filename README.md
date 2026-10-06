@@ -81,6 +81,7 @@ with_session(Session(precision=256)) do
         certificate = supnorm(p, f, domain; accuracy=1//1024)
         println(coefficients(p))
         println(bounds(certificate))
+        println(bounds(BigFloat, certificate; precision=256))
     finally
         certificate === nothing || close(certificate)
         p === nothing || close(p)

@@ -38,7 +38,8 @@ The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
   restores the display setting. This is an expression representation, not a
   proof that arbitrary irrational expressions are rational.
 - `Float64(obj)` is approximate. Do not use it to export a certified upper bound:
-  it may round inward. Use `bounds` and retain its exact rational endpoints.
+  it may round inward. Use exact `bounds(obj)` or outward-rounded
+  `bounds(BigFloat, obj; precision=...)`.
 - `BigFloat(obj, mode=rounding(BigFloat); precision=precision(BigFloat))` correctly
   rounds a finite rational constant using
   [MPFR's rational conversion](https://www.mpfr.org/mpfr-current/mpfr.html#Assignment-Functions).
@@ -115,6 +116,14 @@ It may return a constant, an enclosure or NaN. `evaluate(f, interval)` produces
 a guaranteed image enclosure. `enclosure(f, point)` forces the latter path with a
 singleton interval. Non-dyadic endpoints may be enlarged outward at the current
 precision; `bounds` exports the **actual stored** finite endpoints exactly.
+
+`bounds(BigFloat, I; precision=precision(BigFloat))` exports a finite interval as
+a pair of BigFloat endpoints, rounding the lower endpoint down and the upper
+endpoint up. Both endpoints have the requested precision, so the result encloses
+the stored interval even when reducing precision. Julia's rounding mode does not
+affect this conversion, and neither Julia nor Sollya settings change. As with
+exact `bounds(I)`, non-interval inputs throw `ArgumentError`, and infinite or NaN
+endpoints throw `SollyaError`.
 
 `round_to(obj, bits_or_format; mode=:nearest)` supports `:nearest`, `:down`,
 `:up` and `:zero`. Sollya's symbolic format rounding is not a complete model of
