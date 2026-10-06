@@ -51,6 +51,11 @@ end
         @test_throws ArgumentError ApproximationRequest("exp(x)", (0, 1); kwargs...)
     end
     @test_throws ArgumentError ApproximationRequest("exp(x)", (1, 0))
+    for endpoint in (NaN, Inf, -Inf, BigFloat(NaN), BigFloat(Inf), 1 // 0, -1 // 0)
+        @test_throws ArgumentError ApproximationRequest("exp(x)", (endpoint, 1))
+        @test_throws ArgumentError ApproximationRequest("exp(x)", (0, endpoint))
+    end
+    @test ApproximationRequest("exp(x)", (BigFloat(0), BigFloat(0.5))).domain == (0, 1 // 2)
     fixed = approximate(
         ApproximationRequest(
             "sin(x)",

@@ -7,7 +7,8 @@ const ExactBounds = Tuple{ExactRational, ExactRational}
                          precision=256, accuracy=1//1024)
 
 Serializable input for a coefficient-generation and norm-certification job.
-Bounds and norm accuracy are stored exactly. No native object is created here.
+Domain endpoints must be finite and ordered; norm accuracy must be finite and
+in (0,1). Both are stored exactly. No native object is created here.
 For a scalar format, every selected monomial receives the same format.
 """
 struct ApproximationRequest
@@ -31,6 +32,8 @@ struct ApproximationRequest
     )
         occursin('\0', function_expr) &&
             throw(ArgumentError("function expression cannot contain NUL"))
+        all(isfinite, domain) ||
+            throw(ArgumentError("request domain endpoints must be finite"))
         lo, hi = Rational{BigInt}.(domain)
         lo <= hi || throw(ArgumentError("reversed request domain"))
         if basis isa Integer
@@ -69,8 +72,9 @@ struct ApproximationRequest
             end
         end
         session = Session(; precision)
+        _validate_norm_accuracy(accuracy)
         acc = Rational{BigInt}(accuracy)
-        0 < acc < 1 || throw(ArgumentError("norm accuracy must be in (0,1)"))
+        _validate_norm_accuracy(acc)
         new(
             String(function_expr),
             (lo, hi),

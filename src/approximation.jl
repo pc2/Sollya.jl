@@ -150,12 +150,43 @@ function remez(
     end
 end
 
+function _validate_norm_accuracy(accuracy::Real)
+    isfinite(accuracy) && 0 < accuracy < 1 ||
+        throw(ArgumentError("norm accuracy must be a finite constant in (0,1)"))
+    return nothing
+end
+
+function _validate_norm_accuracy(accuracy)
+    obj = SollyaObject(accuracy)
+    valid = try
+        isfunction(obj) && all((
+            (:sollya_lib_cmp_greater, 0),
+            (:sollya_lib_cmp_less, 1),
+        )) do (op, bound)
+            comparison = _binary(op, obj, bound)
+            try
+                _predicate(:sollya_lib_is_true, comparison)
+            finally
+                close(comparison)
+            end
+        end
+    catch e
+        e isa SollyaError || rethrow()
+        false
+    finally
+        close(obj)
+    end
+    valid || throw(ArgumentError("norm accuracy must be a finite constant in (0,1)"))
+    return nothing
+end
+
 """
     supnorm(p, f, domain; error=:absolute, accuracy=1//1024)
 
 Return a certified enclosure of sup |p-f| (or |p/f-1| for relative error).
-`accuracy` is the requested relative tightness of the norm enclosure, not an
-acceptable approximation error. Native proof failure throws `SollyaError`;
+`accuracy` must be a finite constant in (0,1). It is the requested relative
+tightness of the norm enclosure, not an acceptable approximation error. Invalid
+accuracy throws `ArgumentError`. Native proof failure throws `SollyaError`;
 there is no fallback to sampling. Sollya's smoothness/domain assumptions apply.
 """
 function supnorm(
@@ -167,6 +198,7 @@ function supnorm(
 )
     isrange(domain) || throw(ArgumentError("supnorm domain must be an interval"))
     _locked() do
+        _validate_norm_accuracy(accuracy)
         err = _indicator(error, (:absolute, :relative))
         try
             _withobjects(p, f, domain, err, accuracy) do ptrs

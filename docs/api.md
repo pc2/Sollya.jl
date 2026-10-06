@@ -88,6 +88,10 @@ in the approximation planner. The binding surfaces failures as `SollyaError`.
 the supremum of `abs(p-f)`, or `abs(p/f-1)` for relative error. `accuracy` controls
 relative tightness of that norm enclosure; it is **not an error budget**. Native
 proof failure is an exception and never triggers `dirtyinfnorm` automatically.
+Both `supnorm` and `ApproximationRequest` require finite accuracy strictly between
+zero and one; invalid values throw `ArgumentError`. `supnorm` also accepts Sollya
+constant objects and expression strings whose values can be proved to lie in
+that interval.
 
 `infnorm` preserves the older native certified algorithm. `checkinfnorm` returns
 true when the strict bound is proved; false can mean either a violated bound or
@@ -112,6 +116,8 @@ a generated evaluator's overflow, subnormal, special-value or FMA behavior.
 scopes its precision, runs `fpminimax` then `supnorm`, exports exact coefficients
 and endpoints, and closes native objects. Its result records the domain actually
 certified, error mode and working precision.
+Request domain endpoints must be finite and ordered; non-finite endpoints throw
+`ArgumentError` before conversion or native computation.
 
 `SollyaPool(n)` owns local Julia workers. `approximate_many` runs independent jobs
 using `Distributed.pmap` with one request per batch. Exceptions propagate and

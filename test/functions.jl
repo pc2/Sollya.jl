@@ -125,6 +125,40 @@ end
     end
 end
 
+@testset "Norm accuracy validation" begin
+    with_session() do
+        with_objects() do keep
+            p = keep(SollyaObject(0))
+            f = keep(SollyaObject(1))
+            domain = keep(interval(0, 1))
+            for accuracy in (-1, 0, 1, 2, NaN, -Inf, Inf, 1 // 0, BigFloat(NaN))
+                @test_throws ArgumentError supnorm(p, f, domain; accuracy)
+                @test_throws ArgumentError ApproximationRequest("1", (0, 1); accuracy)
+            end
+            for text in ("-1", "0", "1", "NaN", "infty", "x", "[0.1;0.2]")
+                for accuracy in (text, keep(sollya(text)))
+                    @test_throws ArgumentError supnorm(p, f, domain; accuracy)
+                end
+            end
+            for accuracy in (1 // 1024, 0.5, BigFloat(0.5), prevfloat(1.0))
+                lo, hi = bounds(keep(supnorm(p, f, domain; accuracy)))
+                @test lo <= 1 <= hi
+                @test hi / lo - 1 <= accuracy
+                request = ApproximationRequest("1", (0, 1); accuracy)
+                @test request.accuracy == Rational{BigInt}(accuracy)
+            end
+            for text in ("1/1024", "1/pi")
+                accuracy = keep(sollya(text))
+                lo, hi = bounds(keep(supnorm(p, f, domain; accuracy = text)))
+                @test lo <= 1 <= hi
+                lo, hi = bounds(keep(supnorm(p, f, domain; accuracy)))
+                @test lo <= 1 <= hi
+                @test isopen(accuracy)
+            end
+        end
+    end
+end
+
 @testset "Approximation and proof contracts" begin
     with_session() do
         with_objects() do keep
