@@ -158,6 +158,32 @@ end
     end
 end
 
+@testset "Approximation precision follows BigFloat defaults" begin
+    request = setprecision(BigFloat, 384) do
+        ApproximationRequest("erf(x)", (0, 1 // 4))
+    end
+    io = IOBuffer()
+    serialize(io, request)
+    seekstart(io)
+    request = deserialize(io)
+    with_session(Session(; precision = 192)) do
+        setprecision(BigFloat, 128) do
+            @test approximate(request).precision == 384
+            @test approximate("erf(x)", (0, 1 // 4)).precision == 128
+            @test working_precision() == 192
+            @test precision(BigFloat) == 128
+        end
+    end
+    setprecision(BigFloat, 12) do
+        @test ApproximationRequest("exp(x)", (0, 1)).precision == 12
+    end
+    setprecision(BigFloat, 8) do
+        @test_throws ArgumentError ApproximationRequest("exp(x)", (0, 1))
+        @test_throws ArgumentError approximate("exp(x)", (0, 1))
+        @test ApproximationRequest("exp(x)", (0, 1); precision = 128).precision == 128
+    end
+end
+
 @testset "Requests preserve BigFloat endpoints and accuracy" begin
     lower, upper = setprecision(BigFloat, 512) do
         (prevfloat(BigFloat(1)), nextfloat(BigFloat(1)))
@@ -186,10 +212,11 @@ if get(ENV, "SOLLYA_TEST_WORKERS", "true") == "true"
             @test length(ids) == 2
             @test length(unique(Distributed.remotecall_fetch(getpid, id) for id in ids)) ==
                   2
-            requests = [
-                ApproximationRequest("erf(x)", (0, 1 // 4); precision = bits) for
-                bits in (128, 384, 192, 256)
-            ]
+            requests = map([128, 384, 192, 256]) do bits
+                setprecision(BigFloat, bits) do
+                    ApproximationRequest("erf(x)", (0, 1 // 4))
+                end
+            end
             results = approximate_many(pool, requests)
             @test [r.precision for r in results] == [128, 384, 192, 256]
             @test all(r -> 0 < r.norm_bound[2] < 1 // 100000000, results)

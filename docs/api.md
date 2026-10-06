@@ -26,6 +26,14 @@ native minimum. `with_session` saves these settings and restores them in
 a `finally` block. Nested scopes work on one task. A session does not isolate the
 Sollya symbol environment or make direct calls from other bindings thread safe.
 
+`Session(; precision=precision(BigFloat), ...)` defaults to Julia's current BigFloat precision.
+It captures that value at construction, so a stored or serialized session keeps
+the same precision even if Julia's setting later changes. Pass `precision`
+explicitly to override it. The 12-bit minimum applies to both the default and
+explicit values. Constructing the session does not load Sollya or change
+settings. `with_session() do ... end` constructs a session with these defaults
+on entry. Julia's precision and rounding mode remain independent.
+
 Exact conversion uses `sollya_lib_get_constant_as_mpq` with a native-owned GMP
 rational. GMP operations are resolved through the loaded Sollya library and
 cleared by that same GMP. Julia's GMP/MPFR objects never cross that ABI boundary.
@@ -88,8 +96,11 @@ polynomial directly from an expression string and finite real endpoints,
 including BigFloat values. It returns an `ApproximationResult` containing exact
 coefficients, the actual certified domain and the norm enclosure. It uses the
 same validation, keywords and defaults as `ApproximationRequest`: `basis=5`,
-`formats=:single`, `error=:absolute`, `arithmetic=:floating`, `precision=256`,
-and `accuracy=1//1024`. Endpoint values are preserved exactly before any outward
+`formats=:single`, `error=:absolute`, `arithmetic=:floating`,
+`precision=precision(BigFloat)`, and `accuracy=1//1024`. Precision is captured
+when constructing the request, including for later execution on workers; an
+explicit `precision` overrides this default. The minimum is 12 bits.
+Endpoint values are preserved exactly before any outward
 rounding by interval construction. Settings are restored and temporary native
 objects are released on both success and failure. For stored jobs or a process
 pool, construct an `ApproximationRequest` and call `approximate(request)` or

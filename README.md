@@ -89,6 +89,13 @@ with_session(Session(precision=256)) do
 end
 ```
 
+`Session()` and `ApproximationRequest` capture Julia's current BigFloat precision
+by default. This also sets the default for `with_session()` and direct
+`approximate(...)` calls. Pass `precision=512`, for example, to override it.
+Stored sessions and requests retain their captured precision even if Julia's
+setting later changes. Precision must be at least 12 bits. These APIs do not
+change Julia's precision or rounding mode.
+
 Native objects own their references. Arithmetic creates new objects; `copy`
 creates an independent reference; `close` is idempotent. Finalizers queue cleanup
 for the next serialized native call. `with_objects` closes every object passed

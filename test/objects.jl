@@ -250,9 +250,53 @@ end
     end
 end
 
+@testset "Sessions capture BigFloat precision" begin
+    original = working_precision()
+    session = setprecision(BigFloat, 384) do
+        @test Session().precision == 384
+        @test Session(; precision = 128).precision == 128
+        Session(; points = 64, diameter = 1 // 1024)
+    end
+    io = IOBuffer()
+    serialize(io, session)
+    seekstart(io)
+    session = deserialize(io)
+    setprecision(BigFloat, 64) do
+        setrounding(BigFloat, RoundUp) do
+            with_session(session) do
+                @test working_precision() == 384
+                with_objects() do keep
+                    @test exact_rational(keep(sollya("points"))) == 64
+                    @test exact_rational(keep(sollya("diam"))) == 1 // 1024
+                end
+                @test_throws ErrorException with_session() do
+                    @test working_precision() == 64
+                    error("intentional nested session failure")
+                end
+                @test working_precision() == 384
+                @test precision(BigFloat) == 64
+                @test rounding(BigFloat) == RoundUp
+            end
+            @test working_precision() == original
+            @test precision(BigFloat) == 64
+            @test rounding(BigFloat) == RoundUp
+        end
+    end
+    setprecision(BigFloat, 12) do
+        @test Session().precision == 12
+    end
+    setprecision(BigFloat, 8) do
+        @test_throws ArgumentError Session()
+        @test Session(; precision = 128).precision == 128
+    end
+    @test_throws ArgumentError Session(; points = 2)
+    @test working_precision() == original
+end
+
 @testset "Lazy library discovery" begin
     code =
-        "using Sollya; try; library_path(); error(\"expected missing library\"); " *
+        "using Sollya; Session(); ApproximationRequest(\"exp(x)\", (0, 1)); " *
+        "try; library_path(); error(\"expected missing library\"); " *
         "catch e; e isa ArgumentError || rethrow(); print(\"OK\"); end"
     project = dirname(@__DIR__)
     command = `$(Base.julia_cmd()) --startup-file=no --project=$project -e $code`

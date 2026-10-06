@@ -4,12 +4,16 @@ const ExactBounds = Tuple{ExactRational, ExactRational}
 """
     ApproximationRequest(function_expr, (lower, upper); basis=5, formats=:single,
                          error=:absolute, arithmetic=:floating,
-                         precision=256, accuracy=1//1024)
+                         precision=precision(BigFloat), accuracy=1//1024)
 
 Serializable input for a coefficient-generation and norm-certification job.
 Domain endpoints must be finite and ordered; norm accuracy must be finite and
 in (0,1). Both are stored exactly. No native object is created here.
 For a scalar format, every selected monomial receives the same format.
+Working precision defaults to Julia's current BigFloat precision, captured when
+the request is constructed. Pass `precision` explicitly to override it. Stored
+requests retain that precision when executed later or on a worker. Sollya's
+minimum working precision is 12 bits.
 """
 struct ApproximationRequest
     function_expr::String
@@ -27,7 +31,7 @@ struct ApproximationRequest
         formats = :single,
         error::Symbol = :absolute,
         arithmetic::Symbol = :floating,
-        precision::Integer = 256,
+        precision::Integer = Base.precision(BigFloat),
         accuracy::Real = 1 // 1024,
     )
         occursin('\0', function_expr) &&
@@ -146,7 +150,7 @@ finite real endpoints, including `BigFloat` values. Returns an
 `ApproximationResult` with exact coefficients and certified error bounds.
 
 Accepts the same keywords and defaults as `ApproximationRequest`: `basis=5`,
-`formats=:single`, `error=:absolute`, `arithmetic=:floating`, `precision=256`,
+`formats=:single`, `error=:absolute`, `arithmetic=:floating`, `precision=precision(BigFloat)`,
 and `accuracy=1//1024`. Endpoints are imported exactly; interval construction may
 enlarge them outward. Working precision is restored and temporary native objects
 are released on success or failure.

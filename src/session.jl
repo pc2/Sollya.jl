@@ -1,11 +1,15 @@
 """
-    Session(; precision=256, verbosity=0, points=nothing, diameter=nothing)
+    Session(; precision=precision(BigFloat), verbosity=0, points=nothing, diameter=nothing)
 
 Serializable settings for a scoped computation. A Session is not an independent
 native context: Sollya has one global state per process. Use `with_session` to
 hold the process lock and restore all these settings on success or exception.
 Precision must be at least 12 bits and `points` at least 3. `diameter`, if
 provided, must be a positive rational subdivision threshold.
+Precision defaults to Julia's current BigFloat precision, captured at construction.
+Pass `precision` explicitly to override it. Later changes to Julia's precision
+do not affect a stored session. Construction does not load Sollya or change
+settings; Julia's rounding mode is not a session setting.
 """
 struct Session
     precision::Int
@@ -13,7 +17,7 @@ struct Session
     points::Union{Nothing, Int}
     diameter::Union{Nothing, Rational{BigInt}}
     function Session(;
-        precision::Integer = 256,
+        precision::Integer = Base.precision(BigFloat),
         verbosity::Integer = 0,
         points::Union{Nothing, Integer} = nothing,
         diameter::Union{Nothing, Rational} = nothing,
