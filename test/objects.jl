@@ -49,6 +49,71 @@
     end
 end
 
+@testset "Scoped object cleanup" begin
+    registered = SollyaObject[]
+    result = with_objects() do keep
+        obj = keep(SollyaObject(1 // 3))
+        push!(registered, obj)
+        @test keep(obj) === obj
+        temporary = keep(obj + 1)
+        push!(registered, temporary)
+        close(temporary)
+        @test !isopen(temporary)
+        exact_rational(obj)
+    end
+    @test result == 1 // 3
+    @test all(obj -> !isopen(obj), registered)
+    @test with_objects(_ -> 42) == 42
+
+    failure = ErrorException("intentional scoped failure")
+    seen = Ref{SollyaObject}()
+    caught = try
+        with_objects() do keep
+            seen[] = keep(SollyaObject(7))
+            throw(failure)
+        end
+    catch err
+        err
+    end
+    @test caught === failure
+    @test !isopen(seen[])
+
+    returned = with_objects(keep -> keep(SollyaObject(2)))
+    @test !isopen(returned)
+    expired = with_objects(identity)
+    with_objects() do keep
+        original = keep(SollyaObject(5))
+        retained = keep(with_objects() do inner
+            scoped = inner(copy(original))
+            seen[] = scoped
+            copy(scoped)
+        end)
+        @test !isopen(seen[])
+        @test exact_rational(original) == 5
+        @test exact_rational(retained) == 5
+        @test_throws ArgumentError expired(original)
+        @test isopen(original)
+        @test_throws MethodError keep(5)
+
+        other_task_error = fetch(Threads.@spawn try
+            keep(original)
+        catch err
+            err
+        end)
+        @test other_task_error isa ArgumentError
+        @test isopen(original)
+        task = Threads.@spawn with_objects() do inner
+            obj = inner(SollyaObject(9))
+            (exact_rational(obj), obj)
+        end
+        value, closed = fetch(task)
+        @test value == 9
+        @test !isopen(closed)
+        close(original)
+        @test_throws ArgumentError keep(original)
+    end
+end
+
 @testset "BigFloat imports preserve the stored value" begin
     expected = ((big(1) << 400) + 1) // (big(1) << 400)
     cases = setprecision(BigFloat, 512) do

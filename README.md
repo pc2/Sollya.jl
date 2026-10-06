@@ -76,28 +76,25 @@ reduction and reconstruction need their own analysis in PRESAGe.
 
 ```julia
 with_session(Session(precision=256)) do
-    f = sollya"erf(x)"
-    domain = interval(0, 1//4)
-    p = certificate = nothing
-    try
-        p = fpminimax(f, 5, :single, domain; error=:absolute)
-        certificate = supnorm(p, f, domain; accuracy=1//1024)
+    with_objects() do keep
+        f = keep(sollya"erf(x)")
+        domain = keep(interval(0, 1//4))
+        p = keep(fpminimax(f, 5, :single, domain; error=:absolute))
+        certificate = keep(supnorm(p, f, domain; accuracy=1//1024))
         println(coefficients(p))
         println(coefficients(BigFloat, p; precision=256))
         println(bounds(certificate))
         println(bounds(BigFloat, certificate; precision=256))
-    finally
-        certificate === nothing || close(certificate)
-        p === nothing || close(p)
-        close(domain)
-        close(f)
     end
 end
 ```
 
 Native objects own their references. Arithmetic creates new objects; `copy`
 creates an independent reference; `close` is idempotent. Finalizers queue cleanup
-for the next serialized native call. Use explicit cleanup for bounded memory in
+for the next serialized native call. `with_objects` closes every object passed
+to `keep`, even if the block throws. Register intermediate results too, such as
+`keep(keep(x + 1) * x)`. Return Julia data or an unregistered copy to retain a
+result after the block. Use scoped or explicit cleanup for bounded memory in
 long searches, and `drain_finalizers!()` after forced GC when needed. The shared
 library stays initialized for the process lifetime, avoiding global shutdown
 while references remain alive.
@@ -109,6 +106,7 @@ while references remain alive.
 | Expressions and exact constants | `sollya`, `sollya"…"`, `SollyaObject`, `variable`, arithmetic, Julia elementary functions, `erf`, `erfc` |
 | Polynomial operations | `differentiate`, `substitute`, `horner`, `canonical`, `expand`, `simplify`, `degree`, `coeff`, `coefficients` |
 | Native lists | `sollya_list`, one-based indexing, iteration, `length` |
+| Object lifetime | `with_objects`, `copy`, `close`, `isopen`, `drain_finalizers!` |
 | Intervals and evaluation | `interval`, `infimum`, `supremum`, `midpoint`, `bounds`, `evaluate`, `enclosure` |
 | Approximation | `remez`, `fpminimax`, `guessdegree` |
 | Error analysis | `supnorm`, `infnorm`, `checkinfnorm`, diagnostic `dirtyinfnorm` |

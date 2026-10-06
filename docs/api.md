@@ -7,6 +7,18 @@ loading and initialization are lazy and protected by a process-wide reentrant
 lock. No native handles are stored in precompile images. Returned references are
 owned by `SollyaObject`; finalizers never enter the native library directly.
 
+`with_objects() do keep ... end` provides explicit scoped cleanup. `keep(obj)`
+registers an open local `SollyaObject` and returns the same object. Registered
+objects are closed in reverse registration order when the callback returns or
+throws. Register every temporary that needs deterministic cleanup, including
+intermediate expressions; unregistered objects still rely on explicit `close`
+or finalizers. Repeated registration and early `close` are safe. Register
+`copy(obj)` to keep an existing object open. The callback's return value is
+unchanged, so return Julia data or an unregistered copy to retain usable results.
+The registrar rejects use after the scope exits or from another task; each task
+can create its own scope. This helper does not hold the native lock across the
+callback or change settings. Nest it inside `with_session` to scope settings too.
+
 Sollya has no per-session context handle. `Session` stores plain Julia settings:
 precision, verbosity, optional diagnostic sample count (`points`) and subdivision
 threshold (`diameter`). Working precision must be at least 12 bits, Sollya's

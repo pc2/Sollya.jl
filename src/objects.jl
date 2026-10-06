@@ -88,6 +88,46 @@ function Base.close(obj::SollyaObject)
 end
 Base.isopen(obj::SollyaObject) = obj.process == getpid() && obj.ptr != C_NULL
 
+"""
+    with_objects() do keep
+        obj = keep(SollyaObject(1//3))
+        exact_rational(obj)
+    end
+
+Run a callback with a registrar `keep(obj)` that returns the same open
+`SollyaObject` and takes responsibility for closing it. Registered objects are
+closed in reverse registration order on success or exception. Register each
+temporary explicitly, including intermediate arithmetic results. Registering an
+object more than once or closing it early is safe.
+
+The callback's result is returned unchanged; registered objects in that result
+will already be closed. Return plain Julia data or an unregistered `copy(obj)`
+to retain a result. Register a copy of an existing object to leave the original
+open. The registrar may only be used by the callback's task while the scope is
+active. This helper does not hold the native lock for the callback or change
+settings; combine it with `with_session` when needed.
+"""
+function with_objects(f::F) where {F}
+    owned = SollyaObject[]
+    owner = current_task()
+    active = true
+    function keep(obj::SollyaObject)
+        current_task() === owner ||
+            throw(ArgumentError("object registrar must be used by its creating task"))
+        active || throw(ArgumentError("object scope is closed"))
+        isopen(obj) ||
+            throw(ArgumentError("only open local Sollya objects can be registered"))
+        push!(owned, obj)
+        return obj
+    end
+    try
+        return f(keep)
+    finally
+        active = false
+        foreach(close, Iterators.reverse(owned))
+    end
+end
+
 function Serialization.serialize(::Serialization.AbstractSerializer, ::SollyaObject)
     throw(
         ArgumentError(
