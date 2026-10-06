@@ -68,6 +68,22 @@ end
     @test all(c -> denominator(c * (big(1) << 32)) == 1, fixed.coefficients)
 end
 
+@testset "Requests preserve BigFloat endpoints and accuracy" begin
+    lower, upper = setprecision(BigFloat, 512) do
+        (prevfloat(BigFloat(1)), nextfloat(BigFloat(1)))
+    end
+    expected_lower = ((big(1) << 512) - 1) // (big(1) << 512)
+    expected_upper = ((big(1) << 511) + 1) // (big(1) << 511)
+    setprecision(BigFloat, 64) do
+        request = ApproximationRequest("exp(x)", (lower, upper))
+        @test request.domain == (expected_lower, expected_upper)
+        @test_throws ArgumentError ApproximationRequest("exp(x)", (upper, lower))
+        @test ApproximationRequest("exp(x)", (0, 1); accuracy = lower).accuracy ==
+              expected_lower
+        @test precision(BigFloat) == 64
+    end
+end
+
 # Distributed uses localhost sockets. Set this only in environments that forbid
 # socket creation; ordinary Pkg.test and CI always run the process tests.
 if get(ENV, "SOLLYA_TEST_WORKERS", "true") == "true"

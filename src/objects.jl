@@ -135,9 +135,18 @@ function SollyaObject(value::Union{Float16, Float32, Float64})
         )
     end
 end
+
+_input_rational(value::Real) = Rational{BigInt}(value)
+function _input_rational(value::BigFloat)
+    # Julia's exact decomposition avoids floating arithmetic at the ambient
+    # precision. Only Julia-owned integers are used to reconstruct the value.
+    num, power, den = Base.decompose(value)
+    return power >= 0 ? (num << power) // BigInt(den) : num // (BigInt(den) << -power)
+end
+
 function SollyaObject(value::AbstractFloat)
     isfinite(value) || return SollyaObject(Float64(value))
-    return SollyaObject(Rational{BigInt}(value))
+    return SollyaObject(_input_rational(value))
 end
 
 function Base.copy(obj::SollyaObject)

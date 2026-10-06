@@ -24,7 +24,8 @@
             value = setprecision(BigFloat, 512) do
                 BigFloat(1) + ldexp(BigFloat(1), -400)
             end
-            @test exact_rational(keep(SollyaObject(value))) == Rational{BigInt}(value)
+            @test exact_rational(keep(SollyaObject(value))) ==
+                  ((big(1) << 400) + 1) // (big(1) << 400)
             for text in ("[1;2]", "[1;1]", "exp(pi)+log(2)", "x", "NaN", "infty")
                 @test_throws SollyaError exact_rational(keep(sollya(text)))
             end
@@ -44,6 +45,40 @@
             @test_throws ArgumentError copy(obj)
             @test_throws ArgumentError sollya("1\0+2")
             @test_throws SollyaError sollya("this is invalid syntax ]")
+        end
+    end
+end
+
+@testset "BigFloat imports preserve the stored value" begin
+    expected = ((big(1) << 400) + 1) // (big(1) << 400)
+    cases = setprecision(BigFloat, 512) do
+        value = BigFloat(1) + ldexp(BigFloat(1), -400)
+        (
+            value => expected,
+            -value => -expected,
+            prevfloat(BigFloat(1)) => ((big(1) << 512) - 1) // (big(1) << 512),
+            ldexp(value, 2000) => expected * (big(1) << 2000),
+            ldexp(-value, -2000) => -expected // (big(1) << 2000),
+            BigFloat(0) => 0 // 1,
+            BigFloat(-0.0) => 0 // 1,
+        )
+    end
+    with_session(Session(; precision = 20)) do
+        with_objects() do keep
+            for bits in (64, 1024), mode in (RoundNearest, RoundDown, RoundUp, RoundToZero)
+                setprecision(BigFloat, bits) do
+                    setrounding(BigFloat, mode) do
+                        for (value, rational) in cases
+                            @test exact_rational(keep(SollyaObject(value))) == rational
+                        end
+                        @test precision(BigFloat) == bits
+                        @test rounding(BigFloat) == mode
+                    end
+                end
+            end
+            for value in (BigFloat(Inf), BigFloat(-Inf), BigFloat(NaN))
+                @test isequal(Float64(keep(SollyaObject(value))), Float64(value))
+            end
         end
     end
 end

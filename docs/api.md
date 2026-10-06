@@ -24,8 +24,11 @@ The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
 - `sollya(text)`, `sollya"…"`, `SollyaObject(text)` and
   `parse(SollyaObject, text)` parse an expression and reject native errors.
 - `SollyaObject(integer/rational/binary_float)` imports the stored value exactly.
-  `BigFloat` is converted through its exact dyadic rational. Signed zero is not a
-  distinct rational coefficient; model IEEE sign semantics in the evaluator.
+  `BigFloat` is converted through its exact dyadic rational, independently of
+  Julia's current precision and rounding mode. This also applies to BigFloat
+  endpoints and accuracy in `ApproximationRequest`; conversion does not change
+  those settings. Signed zero is not a distinct rational coefficient; model IEEE
+  sign semantics in the evaluator.
 - `exact_rational(obj)` returns `Rational{BigInt}` only if Sollya proves the object
   is a finite rational constant. It rejects irrational constants and intervals.
 - `coefficients(p)` returns exact coefficients in ascending order, including

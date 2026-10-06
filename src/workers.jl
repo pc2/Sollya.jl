@@ -34,7 +34,7 @@ struct ApproximationRequest
             throw(ArgumentError("function expression cannot contain NUL"))
         all(isfinite, domain) ||
             throw(ArgumentError("request domain endpoints must be finite"))
-        lo, hi = Rational{BigInt}.(domain)
+        lo, hi = _input_rational.(domain)
         lo <= hi || throw(ArgumentError("reversed request domain"))
         if basis isa Integer
             0 <= basis < typemax(Cint) || throw(ArgumentError("invalid degree"))
@@ -73,7 +73,7 @@ struct ApproximationRequest
         end
         session = Session(; precision)
         _validate_norm_accuracy(accuracy)
-        acc = Rational{BigInt}(accuracy)
+        acc = _input_rational(accuracy)
         _validate_norm_accuracy(acc)
         new(
             String(function_expr),
