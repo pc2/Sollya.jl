@@ -139,6 +139,23 @@ function approximate(request::ApproximationRequest)
 end
 
 """
+    approximate(function_expr, (lower, upper); kwargs...)
+
+Generate and certify a polynomial directly from a Sollya expression string and
+finite real endpoints, including `BigFloat` values. Returns an
+`ApproximationResult` with exact coefficients and certified error bounds.
+
+Accepts the same keywords and defaults as `ApproximationRequest`: `basis=5`,
+`formats=:single`, `error=:absolute`, `arithmetic=:floating`, `precision=256`,
+and `accuracy=1//1024`. Endpoints are imported exactly; interval construction may
+enlarge them outward. Working precision is restored and temporary native objects
+are released on success or failure.
+"""
+function approximate(function_expr::AbstractString, domain::Tuple{Real, Real}; kwargs...)
+    return approximate(ApproximationRequest(function_expr, domain; kwargs...))
+end
+
+"""
     SollyaPool(n)
     SollyaPool(n) do pool
         approximate_many(pool, requests)

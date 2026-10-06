@@ -131,6 +131,33 @@ end
     @test all(c -> denominator(c * (big(1) << 32)) == 1, fixed.coefficients)
 end
 
+@testset "Direct approximation calls" begin
+    with_session(Session(; precision = 192)) do
+        result = approximate(
+            SubString(" exp(x) ", 2, 7),
+            (BigFloat(0), BigFloat(1 // 8));
+            basis = [0, 1, 2, 3],
+            formats = 32,
+            error = :relative,
+            arithmetic = :fixed,
+            precision = 160,
+            accuracy = 1 // 128,
+        )
+        @test result isa ApproximationResult
+        @test result.domain == (0, 1 // 8)
+        @test result.error == :relative
+        @test result.precision == 160
+        @test length(result.coefficients) == 4
+        @test all(c -> denominator(c * (big(1) << 32)) == 1, result.coefficients)
+        @test 0 < result.norm_bound[1] <= result.norm_bound[2] < 1 // 1000000
+        @test working_precision() == 192
+        @test_throws ArgumentError approximate("exp(x)", (1, 0))
+        @test_throws ArgumentError approximate("exp(x)", (0, 1); accuracy = 0)
+        @test_throws SollyaError approximate("invalid expression ]", (0, 1))
+        @test working_precision() == 192
+    end
+end
+
 @testset "Requests preserve BigFloat endpoints and accuracy" begin
     lower, upper = setprecision(BigFloat, 512) do
         (prevfloat(BigFloat(1)), nextfloat(BigFloat(1)))

@@ -54,14 +54,17 @@ dependencies, and call `Pkg.offline(true)` before `Pkg.instantiate()`.
 ```julia
 using Sollya
 
-request = ApproximationRequest("erf(x)", (0, 1//4);
+result = approximate("erf(x)", (0, 1//4);
     basis=5, formats=:single, precision=256)
-result = approximate(request)
 
 result.coefficients  # Rational{BigInt}, ascending powers of x
 result.norm_bound    # exact lower and upper bounds on approximation error
 result.polynomial    # dyadic Sollya expression
 ```
+
+The endpoint tuple also accepts BigFloat values. For stored jobs or a process
+pool, construct an `ApproximationRequest` and use `approximate(request)` or
+`approximate_many(pool, requests)`.
 
 The degree-five example gives an absolute approximation error bounded by about
 `2.956e-9` with the installed Sollya 8.0 library. Its coefficients and bound may

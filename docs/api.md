@@ -71,6 +71,18 @@ undecidable results; Julia object identity and hashing are not repurposed.
 
 ## Approximation
 
+`approximate(function_expr, (lower, upper); kwargs...)` generates and certifies a
+polynomial directly from an expression string and finite real endpoints,
+including BigFloat values. It returns an `ApproximationResult` containing exact
+coefficients, the actual certified domain and the norm enclosure. It uses the
+same validation, keywords and defaults as `ApproximationRequest`: `basis=5`,
+`formats=:single`, `error=:absolute`, `arithmetic=:floating`, `precision=256`,
+and `accuracy=1//1024`. Endpoint values are preserved exactly before any outward
+rounding by interval construction. Settings are restored and temporary native
+objects are released on both success and failure. For stored jobs or a process
+pool, construct an `ApproximationRequest` and call `approximate(request)` or
+`approximate_many(pool, requests)`.
+
 `fpminimax(f, basis, formats, interval; error, arithmetic, constrained, minimax)`:
 
 - `basis`: nonnegative degree or increasing vector of selected monomial orders.
