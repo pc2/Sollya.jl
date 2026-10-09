@@ -1,5 +1,20 @@
 # API reference
 
+## Functions
+
+| Purpose | API |
+| --- | --- |
+| Expressions and exact constants | `sollya`, `sollya"…"`, `SollyaObject`, `zero`, `one`, `variable`, arithmetic, Julia elementary functions, `erf`, `erfc` |
+| Polynomial operations | `differentiate`, `substitute`, `horner`, `canonical`, `expand`, `simplify`, `degree`, `coeff`, `coefficients` |
+| Sollya lists | `sollya_list`, one-based indexing, iteration, `length` |
+| Object lifetime | `with_objects`, `copy`, `close`, `isopen`, `drain_finalizers!` |
+| Intervals and evaluation | `interval`, `infimum`, `supremum`, `midpoint`, `bounds`, `evaluate`, `enclosure` |
+| Approximation | `remez`, `fpminimax`, `guessdegree` |
+| Error analysis | `supnorm`, `infnorm`, `checkinfnorm`, diagnostic `dirtyinfnorm` |
+| Zeros | `findzeros`, diagnostic `dirtyfindzeros` |
+| Representation | `exact_rational`, `expression`, approximate `Float64`, rounded `BigFloat`, `round_to` |
+| Configuration and concurrency | `Session`, `with_session`, `working_precision`, `SollyaPool`, `approximate_many` |
+
 ## Library, object lifetime and session settings
 
 Sollya.jl loads the installed Sollya 8.0 library on the first numerical operation.
