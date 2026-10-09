@@ -1,56 +1,65 @@
-# Local verification
+# Verification
 
-Verified on 4 October 2026 in `/Users/papeg/presage/Sollya.jl`.
+## Tested configurations
 
-| Component | Local configuration |
-| --- | --- |
-| Platform | macOS, Apple Silicon |
-| Julia | 1.13.1 |
-| Native library | Sollya 8.0, Homebrew `8.0_3` |
-| C regression compiler | Homebrew LLVM/Clang 23.1.2 |
-| Julia dependencies | `Distributed`, `Libdl`, `Serialization`, test-only `Test` |
+The package tests pass for the following configurations of numerical
+implementation `750bc95`. The [CI run on 9 October 2026](https://github.com/pc2/Sollya.jl/actions/runs/37980294936)
+completed successfully in all four jobs, including thread and worker tests.
 
-## Results
+| Platform | Julia | Sollya | Passed checks |
+| --- | --- | --- | --- |
+| Ubuntu, x86-64 | 1.10.12 | 8.0, distribution package | 1,521 |
+| Ubuntu, x86-64 | 1.13.1 | 8.0, distribution package | 2,121 |
+| macOS, Apple Silicon | 1.10.12 | 8.0, Homebrew | 1,521 |
+| macOS, Apple Silicon | 1.13.1 | 8.0, Homebrew | 2,121 |
 
-- **863/863 Julia package checks passed** through `Pkg.test`, with four Julia
-  threads and two independent local Julia worker processes. No tests skipped.
-- **4/4 original Sollya C regression programs passed** against their supplied
-  `.reference` files: `tcoeff`, `tfpminimax`, `tget_constant_as_uint64_array`,
-  `tget_element_in_list`. Normalization covers whitespace and free-variable name.
-- Package precompilation succeeded. Missing-library behavior was checked in a
-  fresh process: import succeeds and the first native operation gives a useful
-  error. Native handles are not retained in the precompile image.
-- Exact rational transfer includes 2000-bit integers, 400-bit dyadic offsets,
-  rationals, binary floating point inputs and a 512-bit Julia BigFloat input.
-- Scoped settings restore after success, nested calls and exceptions. Native
-  minimums of 12 precision bits and 3 diagnostic sample points are enforced.
-- Parallel requests use differing working precisions; a failed request propagates
-  and workers remain usable. Workers are removed by explicit and do-block cleanup.
+The earlier CI selector `'1'` resolved to Julia 1.13.1 in that run. The workflow
+now names `'1.13'` explicitly alongside `'1.10'`. Test counts differ between Julia
+versions as reported by their test runners. Windows support is not established.
 
-## Reproduction
+## What the tests cover
 
-From the package directory, with the installed native dependencies:
+- Exact import and export of integers, rational values and stored BigFloat values,
+  including values wider than machine precision.
+- Correctly rounded BigFloat conversion, point evaluation and coefficient export
+  for rational and symbolic constants, with all five supported rounding modes.
+- Outward interval bounds and restoration of Julia and Sollya settings.
+- Approximation and certified norm APIs, adapted upstream regression cases,
+  error diagnostics and explicit refinement failures.
+- Scoped object cleanup, copying, broadcasting and rejection of native-object
+  serialization.
+- Thread serialization and independent worker processes, including recovery after
+  numerical failures and worker cleanup.
 
-```sh
-JULIA_DEPOT_PATH=/tmp/presage-sollya-depot: \
-JULIA_PKG_OFFLINE=true JULIA_PKG_SERVER='' \
-  julia --startup-file=no --threads=4 --project=. \
-  -e 'using Pkg; Pkg.test(; allow_reresolve=false)'
+Four original Sollya C regression programs also passed locally on 6 October
+2026 with Clang 23.1.2: `tcoeff`, `tfpminimax`,
+`tget_constant_as_uint64_array` and `tget_element_in_list`.
 
-JULIA_DEPOT_PATH=/tmp/presage-sollya-depot: \
-CC=/opt/homebrew/opt/llvm/bin/clang \
-  julia --startup-file=no --project=. \
-  test/upstream/run_native.jl ../sollya-8.0
-```
+## Git installation and PRESAGe integration
 
-The temporary depot keeps package caches outside the user's existing Julia depot.
-The worker tests needed permission to bind localhost sockets in this execution
-sandbox. Neither command downloaded dependencies or queried online resources.
+On 9 October 2026, a fresh temporary PRESAGe project installed Sollya directly
+from its Git remote at commit `750bc95613f2742e54eb12f3858b1c6dbbc73c6d`.
+It precompiled and passed all 2,121 Sollya checks on Julia 1.13.1 without using
+a sibling development checkout.
 
-## Scope of the evidence
+That installation also passed concurrent LUT/polynomial generation, certificate
+replay, and generated AP/AC kernel compilation and sampled verification through
+PRESAGe's standalone C++ checker. Setup checks covered an explicit local checkout
+override and restoration of the pinned Git dependency from an existing local
+Manifest. These integration checks ran on macOS with the public vendor headers.
 
-The native proof routines certify polynomial approximation bounds under Sollya's
-assumptions. The tests additionally check contract handling and selected numerical
-results; they do not establish correctness of a future PRESAGe arithmetic IR or
-generated evaluator. Linux and Julia 1.10 are configured in CI but have not been
-executed in this local verification. No FPGA or vendor synthesis tools were used.
+Import and precompilation without a discoverable native library were checked
+locally: loading the Julia module succeeds, and the first numerical operation
+reports how to install or locate Sollya.
+
+## Scope
+
+Sollya's proof routines retain their native mathematical assumptions. Their norm
+bounds apply to mathematical expressions and polynomials; an application's
+rounded arithmetic needs its own error analysis.
+
+Symbolic refinement can remain inconclusive at exact rounding boundaries.
+`max_work_precision` limits precision, rather than runtime; some native calls can
+take a long time. See the [API reference](api.md) for conversion and proof behavior.
+
+Development and test commands are in [CONTRIBUTING.md](../CONTRIBUTING.md).

@@ -1,11 +1,11 @@
-# API and numerical contracts
+# API reference
 
-## Native library and ownership
+## Library, object lifetime and session settings
 
-The initial binding targets the public `sollya.h` API in Sollya 8.0. Library
-loading and initialization are lazy and protected by a process-wide reentrant
-lock. No native handles are stored in precompile images. Returned references are
-owned by `SollyaObject`; finalizers never enter the native library directly.
+Sollya.jl loads the installed Sollya 8.0 library on the first numerical operation.
+Import and precompilation work without the library; first use reports a missing
+library with installation guidance. Calls share Sollya's state within a process.
+`SollyaObject` values remain usable until explicitly closed or garbage collected.
 
 `with_objects() do keep ... end` provides explicit scoped cleanup. `keep(obj)`
 registers an open local `SollyaObject` and returns the same object. Registered
@@ -34,18 +34,12 @@ explicit values. Constructing the session does not load Sollya or change
 settings. `with_session() do ... end` constructs a session with these defaults
 on entry. Julia's precision and rounding mode remain independent.
 
-Exact conversion uses `sollya_lib_get_constant_as_mpq` with a native-owned GMP
-rational. GMP operations are resolved through the loaded Sollya library and
-cleared by that same GMP. Julia's GMP/MPFR objects never cross that ABI boundary.
-The small internal structs mirror GMP's public `mpz_t`/`mpq_t` layout.
-
 ## Errors and diagnostics
 
-`SollyaError` retains its `operation` and `detail` fields and adds `diagnostics`,
-a vector of native message IDs paired with generic summary strings. The usual
-two-argument constructor remains supported. `showerror` prints the summaries
-after the main error. Parsing errors also include up to 256 characters of the
-input, quoted and escaped.
+`SollyaError` describes a failed numerical operation through `operation`, `detail`
+and `diagnostics`. Diagnostics pair native message IDs with summary strings and
+appear in the printed error. Parsing errors also include up to 256 characters of
+the input, quoted and escaped.
 
 Parsing, `fpminimax`, `remez` and `supnorm` collect up to 16 distinct recent native
 messages for the failing call. These are Sollya's generic summaries, not its
@@ -53,13 +47,9 @@ fully formatted console messages. Explicitly suppressed messages remain
 unavailable, and a failure can have no diagnostics. Successful-call diagnostics
 are discarded. Errors and their diagnostics are plain data suitable for workers.
 
-With verbosity zero and no existing callback, the approximation routines briefly
-enable warning capture while keeping console output quiet, then restore verbosity
-and the native callback on every exit. Parsing keeps verbosity unchanged because
-expressions can read settings; its native diagnostics depend on that verbosity.
-An existing callback is forwarded to and restored, with its original verbosity
-filtering and display decisions preserved. Callback state and native message
-storage remain within the process library lock.
+Approximation errors can include diagnostics even with verbosity zero. Parsing
+diagnostics depend on the session's verbosity. Diagnostic capture restores the
+session settings after the call.
 
 ## Expressions and data transfer
 
@@ -69,8 +59,7 @@ storage remain within the process library lock.
   `BigFloat` is converted through its exact dyadic rational, independently of
   Julia's current precision and rounding mode. This also applies to BigFloat
   endpoints and accuracy in `ApproximationRequest`; conversion does not change
-  those settings. Signed zero is not a distinct rational coefficient; model IEEE
-  sign semantics in the evaluator.
+  those settings. Exact rational values do not distinguish signed zero.
 - `SollyaObject(π)`, `SollyaObject(ℯ)` and `SollyaObject(Base.MathConstants.φ)`
   import exact symbolic constants: `pi`, `exp(1)` and `(1 + sqrt(5)) / 2`.
   The aliases `pi`, `Base.MathConstants.e` and `Base.MathConstants.golden` also
@@ -111,8 +100,8 @@ storage remain within the process library lock.
 - `expression(obj; display=:dyadic)` prints stored binary constants exactly and
   restores the display setting. This is an expression representation, not a
   proof that arbitrary irrational expressions are rational.
-- `Float64(obj)` is approximate. Do not use it to export a certified upper bound:
-  it may round inward. Use exact `bounds(obj)` or outward-rounded
+- `Float64(obj)` is approximate and may round an upper bound inward.
+  Export interval bounds with exact `bounds(obj)` or outward-rounded
   `bounds(BigFloat, obj; precision=...)`.
 - `BigFloat(obj, mode=rounding(BigFloat); precision=precision(BigFloat),
   max_work_precision=nothing)` correctly rounds a finite real constant.
@@ -193,12 +182,12 @@ pool, construct an `ApproximationRequest` and call `approximate(request)` or
   `:doubleextended`, `:quad`, `:double_double`, `:triple_double`.
 - Fixed formats are integer **fractional widths**. Width `b` restricts a
   coefficient to multiples of `2^-b`. Negative fractional widths are allowed.
-  This is not a total word width; integer range analysis comes later.
+  These widths control coefficient spacing, rather than a total fixed word width.
 - `constrained` is a fixed polynomial part added to the selected terms.
 - `minimax` supplies the optional final seed polynomial or coefficient list.
 
-The wrapper deliberately defaults to absolute error; native Sollya's command
-defaults to relative error. Pass the keyword explicitly in ported code.
+The wrapper defaults to absolute error; native Sollya's command defaults to
+relative error. Specify `error=:relative` when that is the desired norm.
 
 `remez(f, basis, interval; weight, quality, stop_bounds)` minimizes
 `sup(abs(p*weight-f))`. The default weight is one. For relative approximation of
@@ -208,8 +197,8 @@ possible unbounded endpoints; it does not return a guessed integer as a proof.
 
 Sollya's differentiability and basis assumptions remain applicable. Sparse odd
 monomials on a symmetric interval can violate the Haar condition and fail native
-Remez convergence. Symmetry reduction to a one-sided or transformed kernel belongs
-in the approximation planner. The binding surfaces failures as `SollyaError`.
+Remez convergence. A one-sided or transformed kernel can be useful for these
+functions. Failures raise `SollyaError`.
 
 ## Proof versus estimates
 
@@ -222,12 +211,11 @@ zero and one; invalid values throw `ArgumentError`. `supnorm` also accepts Solly
 constant objects and expression strings whose values can be proved to lie in
 that interval.
 
-`infnorm` preserves the older native certified algorithm. `checkinfnorm` returns
+`infnorm` returns a certified norm enclosure. `checkinfnorm` returns
 true when the strict bound is proved; false can mean either a violated bound or
 an inconclusive proof. Keep `diameter` positive to avoid unbounded subdivision.
 `dirtyinfnorm` and `dirtyfindzeros` are diagnostics, not certificates.
-`findzeros` inherits Sollya's smoothness and zero-isolation assumptions; see the
-local Sollya manual before using it as an exhaustive root certificate.
+`findzeros` inherits Sollya's smoothness and zero-isolation assumptions.
 
 `evaluate(f, point)` uses native faithful evaluation at the working precision.
 It may return a constant, an enclosure or NaN. `evaluate(f, interval)` produces
@@ -277,5 +265,5 @@ Request domain endpoints must be finite and ordered; non-finite endpoints throw
 `SollyaPool(n)` owns local Julia workers. `approximate_many` runs independent jobs
 using `Distributed.pmap` with one request per batch. Exceptions propagate and
 workers remain usable after a numerical failure. Use a do block to ensure worker
-cleanup. This initial pool API has no timeout, cancellation or automatic retry;
-set resource limits in the planner before scheduling large native searches.
+cleanup. The pool has no timeout, cancellation or automatic retry; a native call
+runs until completion or failure.
